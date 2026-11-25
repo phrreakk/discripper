@@ -2,8 +2,8 @@
 
 The token is never stored in this repo. Tests look for it, in order:
 
-1. the ``TMDB_API_READ_KEY`` environment variable
-2. ``TMDB_API_READ_KEY`` in ``$XDG_CONFIG_HOME/discripper/tmdb.env``
+1. the ``TMDB_API_KEY`` environment variable
+2. ``TMDB_API_KEY`` in ``$XDG_CONFIG_HOME/discripper/tmdb.env``
    (``~/.config/discripper/tmdb.env`` when ``XDG_CONFIG_HOME`` isn't set)
 
 Without one, tests marked ``@requires_tmdb_key`` are skipped.
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from dotenv import dotenv_values
 
-KEY_NAME = "TMDB_API_READ_KEY"
+KEY_NAME = "TMDB_API_KEY"
 
 
 def key_file():
