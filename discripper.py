@@ -95,6 +95,21 @@ def pickById(prompt, columns, rows):
             return items[chosen]
 
 
+def askYear(kind):
+    """Ask for an optional production year until it's blank or a year from 1900 to this year."""
+    while True:
+        year = input("What is the {} production year? (Optional) ".format(kind))
+        if year == "":
+            return year
+        try:
+            number = int(year)
+        except ValueError:
+            number = None
+        if number is not None and 1900 <= number <= datetime.today().year:
+            return str(number)
+        print("You need a valid year ")
+
+
 def chooseMedia(lookup, kind, name, year, tmdbId):
     """Find the Media being ripped (by search, or by TMDB id) and, for TV, its Season.
 
@@ -320,14 +335,7 @@ def main():
             mediaTitle = args.title
         
         if args.year is None:
-            while True:
-                mediaYear = input("What is the {} production year? (Optional) ".format(args.media))
-                if mediaYear == "":
-                    break
-                elif int(mediaYear) < 1900 or int(mediaYear) > datetime.today().year:
-                    print("You need a valid year ")
-                else:
-                    break
+            mediaYear = askYear(args.media)
         else:
             mediaYear = args.year
         
