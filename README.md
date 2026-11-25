@@ -56,10 +56,10 @@ uv run python -m unittest discover -s tests -t .
 Most tests use fake TMDB responses. A few, in `tests/test_tmdb_live.py`, call the real TMDB API, and they're skipped unless you have a TMDB read token. Keep your token outside the repo, in either place:
 
 ```
-export TMDB_API_READ_KEY=<your read token>
+export TMDB_API_KEY=<your read token>
 # or
 mkdir -p ~/.config/discripper
-echo 'TMDB_API_READ_KEY=<your read token>' > ~/.config/discripper/tmdb.env
+echo 'TMDB_API_KEY=<your read token>' > ~/.config/discripper/tmdb.env
 chmod 600 ~/.config/discripper/tmdb.env
 ```
 
