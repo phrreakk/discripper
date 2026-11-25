@@ -164,16 +164,22 @@ def episodeNumber(seasonFolder, rip):
     """The episode number of rip in a Season, counting rips in the order they were first encoded.
 
     Each Season folder keeps episode.list, one Rip path per line. A Rip is matched
-    by file name and added at the end the first time it's seen.
+    by its folder and file name, since discs of one Season can name their Rips
+    the same, and added at the end the first time it's seen.
     """
     listing = Path(seasonFolder) / "episode.list"
     lines = listing.read_text(encoding="utf-8").splitlines() if listing.exists() else []
-    names = [Path(line).name for line in lines if line.strip()]
-    if rip.name not in names:
+    seen = [_ripKey(Path(line)) for line in lines if line.strip()]
+    if _ripKey(rip) not in seen:
         with open(listing, "a", encoding="utf-8") as file:
             file.write(str(rip) + "\n")
-        names.append(rip.name)
-    return names.index(rip.name) + 1
+        seen.append(_ripKey(rip))
+    return seen.index(_ripKey(rip)) + 1
+
+
+def _ripKey(rip):
+    """What tells one Rip from another in episode.list: its disc folder and file name."""
+    return (Path(rip).parent.name, Path(rip).name)
 
 
 def encodeFullMkv(encoder, rip, media, parentFolder, season, formats):

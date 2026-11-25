@@ -100,6 +100,22 @@ class RunRipTest(unittest.TestCase):
         self.assertTrue((show / "D2" / "title_t00.mkv").is_file())
         self.assertTrue((show / SEASON_FOLDER / "DreamWorks_Dragons S01E01 - 1080p.mkv").is_file())
 
+    def test_two_discs_whose_rips_share_file_names_become_different_episodes(self):
+        show = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        makemkv = FakeTool(makemkv_that_copies)
+        handbrake = FakeTool(handbrake_that_finishes)
+        with redirect_stdout(io.StringIO()):
+            for disc in ["D1", "D2"]:
+                discripper.runRip(plan(SHOW, show / disc, [title(0)], 1, ["1080p"], library=show),
+                                  Disc(makemkv), Encoder(handbrake, "x265_10bit"))
+
+        self.assertEqual(len(makemkv.calls), 2)
+        self.assertTrue((show / "D1" / "title_t00.mkv").is_file())
+        self.assertTrue((show / "D2" / "title_t00.mkv").is_file())
+        self.assertEqual(sorted(path.name for path in (show / SEASON_FOLDER).glob("*.mkv")),
+                         ["DreamWorks_Dragons S01E01 - 1080p.mkv",
+                          "DreamWorks_Dragons S01E02 - 1080p.mkv"])
+
     def test_a_failed_rip_exits_and_points_at_its_log(self):
         folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
         out = io.StringIO()
