@@ -61,6 +61,17 @@ class TitlesTest(unittest.TestCase):
         self.assertEqual([(t.playlist, t.segments) for t in titles],
                          [("00800.mpls", "1-4,9"), ("00801.mpls", "5,2-4,9")])
 
+    def test_a_title_lists_the_playlists_makemkv_skipped_as_equal_to_it(self):
+        # The MSG line is copied from the Planes (2013) disc; its English copy has a duplicate.
+        text = ('MSG:3309,0,2,"Title 00803.mpls is equal to title 00800.mpls and was skipped",'
+                '"Title %1 is equal to title %2 and was skipped","00803.mpls","00800.mpls"\n'
+                'TINFO:0,16,0,"00800.mpls"\nTINFO:0,27,0,"title_t00.mkv"\n'
+                'TINFO:1,16,0,"00801.mpls"\nTINFO:1,27,0,"title_t01.mkv"\n')
+
+        titles = Disc(info(text)).titles(self.folder / "info.log")
+
+        self.assertEqual([t.duplicates for t in titles], [("00803.mpls",), ()])
+
     def test_no_drive_means_no_titles(self):
         no_drive = (FIXTURES / "info_no_drive.txt").read_text(encoding="utf-8")
 

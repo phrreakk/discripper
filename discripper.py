@@ -43,9 +43,16 @@ def showDiscTitles(titles):
                          "Segments differ from", "File"]
     table.align = "l"
     for title in titles:
-        table.add_row([title.number, title.duration, title.chapters, title.size, title.playlist,
+        table.add_row([title.number, title.duration, title.chapters, title.size, playlistCell(title),
                        sameLengthDifferences(title, titles), title.file_name])
     print(table)
+
+
+def playlistCell(title):
+    """The title's playlist, then any playlists makemkvcon skipped as equal to it, e.g. "00800.mpls (+00803)"."""
+    if not title.duplicates:
+        return title.playlist
+    return f"{title.playlist} (+{', '.join(Path(name).stem for name in title.duplicates)})"
 
 
 def sameLengthDifferences(title, titles):
@@ -209,6 +216,7 @@ def chooseDiscTitles(kind, titles):
         print("The title with the most chapters is probably the one you want to rip. ")
         print("Titles of the same length are often language versions of the movie. Two that")
         print("differ in only a few segments usually differ just in the title card and credits.")
+        print("A playlist with a (+duplicate) may be the disc's default copy; on Planes it was English.")
         return [askDiscTitle("Which single title would you like to rip? ", titles)]
     start = askDiscTitle("Which title should START the rip? ", titles)
     end = askDiscTitle("Which title should END the rip? ",

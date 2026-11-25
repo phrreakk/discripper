@@ -25,6 +25,9 @@ _SEGMENTS = 26
 _FILE_NAME = 27
 
 _TINFO = re.compile(r'^TINFO:(\d+),(\d+),\d+,"(.*)"$')
+# "Title A is equal to title B and was skipped": makemkvcon leaves out playlist A
+# because it plays the same segments as B. Its last two fields are A and B.
+_EQUAL = re.compile(r'^MSG:3309,.*,"([^"]*)","([^"]*)"$')
 
 
 @dataclass(frozen=True)
@@ -39,6 +42,9 @@ class DiscTitle:
     # but differ in a segment or two, such as a localized title card.
     playlist: str = ""
     segments: str = ""
+    # Playlists makemkvcon skipped because they play exactly this title. On the
+    # Planes disc, only the English copy had one.
+    duplicates: tuple[str, ...] = ()
 
 
 class RipFailed(Exception):
@@ -59,7 +65,12 @@ class Disc:
         """The Disc titles in the drive, lowest number first. Empty if there's no disc."""
         self._run(["-r", f"--minlength={MIN_LENGTH}", "info", self._drive], log)
         attributes: dict[int, dict[int, str]] = {}
+        duplicates: dict[str, list[str]] = {}
         for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+            equal = _EQUAL.match(line)
+            if equal:
+                skipped, kept = equal.groups()
+                duplicates.setdefault(kept, []).append(skipped)
             match = _TINFO.match(line)
             if match:
                 number, attribute, value = match.groups()
@@ -70,7 +81,8 @@ class Disc:
                           chapters=int(found.get(_CHAPTERS, "0")),
                           size=found.get(_SIZE, ""),
                           playlist=found.get(_PLAYLIST, ""),
-                          segments=found.get(_SEGMENTS, ""))
+                          segments=found.get(_SEGMENTS, ""),
+                          duplicates=tuple(duplicates.get(found.get(_PLAYLIST, ""), ())))
                 for number, found in sorted(attributes.items())
                 # A Disc title with no file name can't be ripped, so it isn't offered.
                 if _FILE_NAME in found]

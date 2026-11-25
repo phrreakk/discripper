@@ -1,3 +1,4 @@
+import dataclasses
 import io
 import os
 import sys
@@ -187,6 +188,14 @@ class ShowDiscTitlesTest(unittest.TestCase):
             "title 2 in 42, title 3 in 42",
             "",
         ])
+
+    def test_a_skipped_duplicate_playlist_shows_next_to_its_title(self):
+        english = dataclasses.replace(T03, duplicates=("00803.mpls",))
+
+        rows = self.rows([T02, english])
+
+        self.assertEqual([row["Playlist"] for row in rows],
+                         ["00801.mpls", "00800.mpls (+00803)"])
 
     def test_the_table_stays_narrow(self):
         out = io.StringIO()
