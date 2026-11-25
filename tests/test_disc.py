@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from disc import MIN_LENGTH, Disc, DiscTitle, RipFailed  # noqa: E402
+from disc import MIN_LENGTH, Disc, DiscTitle, RipFailed, segments_differing  # noqa: E402
+from tests.planes_titles import T02, T03, T04  # noqa: E402
 from tests.fakes import FakeTool, makemkv_that_copies  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures" / "makemkv"
@@ -47,6 +48,29 @@ class TitlesTest(unittest.TestCase):
             DiscTitle(number=1, file_name="title_t01.mkv", duration="0:05:12",
                       chapters=1, size="1.1 GB"),
         ])
+
+    def test_each_title_also_carries_its_playlist_and_segment_map(self):
+        # Two language versions of one movie: same length, different opening segment.
+        text = ('TINFO:0,9,0,"1:31:40"\nTINFO:0,16,0,"00800.mpls"\nTINFO:0,26,0,"1-4,9"\n'
+                'TINFO:0,27,0,"title_t00.mkv"\n'
+                'TINFO:1,9,0,"1:31:40"\nTINFO:1,16,0,"00801.mpls"\nTINFO:1,26,0,"5,2-4,9"\n'
+                'TINFO:1,27,0,"title_t01.mkv"\n')
+
+        titles = Disc(info(text)).titles(self.folder / "info.log")
+
+        self.assertEqual([(t.playlist, t.segments) for t in titles],
+                         [("00800.mpls", "1-4,9"), ("00801.mpls", "5,2-4,9")])
+
+    def test_a_title_lists_the_playlists_makemkv_skipped_as_equal_to_it(self):
+        # The MSG line is copied from the Planes (2013) disc; its English copy has a duplicate.
+        text = ('MSG:3309,0,2,"Title 00803.mpls is equal to title 00800.mpls and was skipped",'
+                '"Title %1 is equal to title %2 and was skipped","00803.mpls","00800.mpls"\n'
+                'TINFO:0,16,0,"00800.mpls"\nTINFO:0,27,0,"title_t00.mkv"\n'
+                'TINFO:1,16,0,"00801.mpls"\nTINFO:1,27,0,"title_t01.mkv"\n')
+
+        titles = Disc(info(text)).titles(self.folder / "info.log")
+
+        self.assertEqual([t.duplicates for t in titles], [("00803.mpls",), ()])
 
     def test_no_drive_means_no_titles(self):
         no_drive = (FIXTURES / "info_no_drive.txt").read_text(encoding="utf-8")
@@ -125,6 +149,23 @@ class RipTest(unittest.TestCase):
 
         self.assertTrue((self.folder / "makemkvrip_t00.log").is_file())
         self.assertTrue((self.folder / "makemkvrip_t01.log").is_file())
+
+
+class SegmentsDifferingTest(unittest.TestCase):
+    def test_two_language_copies_differ_only_in_their_title_card_and_credits(self):
+        self.assertEqual(segments_differing(T02, T03), 2)
+
+    def test_a_copy_with_its_own_on_screen_text_differs_all_through(self):
+        self.assertEqual(segments_differing(T03, T04), 42)
+
+    def test_the_count_is_the_same_either_way_round(self):
+        self.assertEqual(segments_differing(T04, T02), segments_differing(T02, T04))
+
+    def test_makemkv_ranges_count_as_every_segment_in_them(self):
+        a = DiscTitle(0, "a.mkv", "1:00:00", 1, "1 GB", segments="1-4,9")
+        b = DiscTitle(1, "b.mkv", "1:00:00", 1, "1 GB", segments="1,2,3,4,10")
+
+        self.assertEqual(segments_differing(a, b), 1)
 
 
 if __name__ == "__main__":

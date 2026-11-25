@@ -10,7 +10,7 @@ from dotenv import dotenv_values
 from prettytable import PrettyTable
 import library_layout
 from library_layout import Format
-from disc import Disc, DiscTitle, RipFailed
+from disc import Disc, DiscTitle, RipFailed, segments_differing
 from encoder import ENCODERS, EncodeFailed, Encoder
 from media_lookup import LookupFailed, Media, MediaLookup, NoResults, TooManyResults, tmdb_fetch
 from tool_run import tool
@@ -44,11 +44,29 @@ def getRequirements():
 
 def showDiscTitles(titles):
     table = PrettyTable()
-    table.field_names = ["Title", "Duration", "Chapters", "Size", "File"]
+    table.field_names = ["Title", "Duration", "Chapters", "Size", "Playlist",
+                         "Segments differ from", "File"]
     table.align = "l"
     for title in titles:
-        table.add_row([title.number, title.duration, title.chapters, title.size, title.file_name])
+        table.add_row([title.number, title.duration, title.chapters, title.size, playlistCell(title),
+                       sameLengthDifferences(title, titles), title.file_name])
     print(table)
+
+
+def playlistCell(title):
+    """The title's playlist, then any playlists makemkvcon skipped as equal to it, e.g. "00800.mpls (+00803)"."""
+    if not title.duplicates:
+        return title.playlist
+    return f"{title.playlist} (+{', '.join(Path(name).stem for name in title.duplicates)})"
+
+
+def sameLengthDifferences(title, titles):
+    """How many segments title differs by from each other title of its length, e.g. "title 3 in 2"."""
+    others = [other for other in titles
+              if other.number != title.number and other.duration == title.duration
+              and other.segments and title.segments]
+    return ", ".join(f"title {other.number} in {segments_differing(title, other)}"
+                     for other in others)
 
 
 def askDiscTitle(prompt, titles):
@@ -201,6 +219,9 @@ def chooseDiscTitles(kind, titles):
     showDiscTitles(titles)
     if kind == "movie":
         print("The title with the most chapters is probably the one you want to rip. ")
+        print("Titles of the same length are often language versions of the movie. Two that")
+        print("differ in only a few segments usually differ just in the title card and credits.")
+        print("A playlist with a (+duplicate) may be the disc's default copy; on Planes it was English.")
         return [askDiscTitle("Which single title would you like to rip? ", titles)]
     start = askDiscTitle("Which title should START the rip? ", titles)
     end = askDiscTitle("Which title should END the rip? ",

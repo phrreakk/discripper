@@ -1,3 +1,4 @@
+import dataclasses
 import io
 import os
 import sys
@@ -14,6 +15,7 @@ from encoder import Encoder  # noqa: E402
 from media_lookup import Media, MediaLookup  # noqa: E402
 from tests.test_choose_media import DRAGON, DRAGONS_SHOW, SEASONS  # noqa: E402
 from tests.test_media_lookup import FakeTmdb  # noqa: E402
+from tests.planes_titles import EXTRA, T02, T03, T04  # noqa: E402
 from tests.fakes import FakeTool, handbrake_that_finishes, makemkv_that_copies  # noqa: E402
 
 MOVIE = Media(kind="movie", tmdb_id=10191, name="How to Train Your Dragon", year="2010")
@@ -163,6 +165,44 @@ class PlanRipTest(unittest.TestCase):
 
         self.assertEqual(exit.exception.code, 1)
         self.assertIn("makemkvinfo.log", self.out.getvalue())
+
+
+class ShowDiscTitlesTest(unittest.TestCase):
+    def rows(self, titles):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            discripper.showDiscTitles(titles)
+        lines = [line for line in out.getvalue().splitlines() if line.startswith("|")]
+        header = [cell.strip() for cell in lines[0].strip("|").split("|")]
+        return [dict(zip(header, (cell.strip() for cell in line.strip("|").split("|"))))
+                for line in lines[1:]]
+
+    def test_copies_of_the_same_length_show_how_much_they_differ(self):
+        rows = self.rows([T02, T03, T04, EXTRA])
+
+        self.assertEqual([row["Playlist"] for row in rows],
+                         ["00801.mpls", "00800.mpls", "00802.mpls", "00036.m2ts"])
+        self.assertEqual([row["Segments differ from"] for row in rows], [
+            "title 3 in 2, title 4 in 42",
+            "title 2 in 2, title 4 in 42",
+            "title 2 in 42, title 3 in 42",
+            "",
+        ])
+
+    def test_a_skipped_duplicate_playlist_shows_next_to_its_title(self):
+        english = dataclasses.replace(T03, duplicates=("00803.mpls",))
+
+        rows = self.rows([T02, english])
+
+        self.assertEqual([row["Playlist"] for row in rows],
+                         ["00801.mpls", "00800.mpls (+00803)"])
+
+    def test_the_table_stays_narrow(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            discripper.showDiscTitles([T02, T03, T04, EXTRA])
+
+        self.assertLess(max(len(line) for line in out.getvalue().splitlines()), 120)
 
 
 class ChooseDiscTitlesTest(unittest.TestCase):
