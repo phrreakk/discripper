@@ -1,4 +1,4 @@
-"""Media lookup: find Media and Seasons on TMDB.
+"""Media lookup: find Media, Seasons and Episodes on TMDB.
 
 The only dependency is ``fetch(path, params) -> dict``, which performs a GET
 against the TMDB v3 API (``path`` is relative, e.g. ``"search/movie"``) and
@@ -27,6 +27,14 @@ class Season:
     number: int
     name: str
     air_date: str
+
+
+@dataclass(frozen=True)
+class Episode:
+    """One Episode of a Season. runtime is in minutes, or None when TMDB has none."""
+    number: int
+    name: str
+    runtime: int | None
 
 
 @dataclass(frozen=True)
@@ -81,12 +89,19 @@ class MediaLookup:
         return _media(kind, self._fetch(f"{kind}/{tmdb_id}", {"language": "en-US"}))
 
     def seasons(self, show):
-        if show.kind != "tv":
-            raise ValueError(f"Only TV shows have seasons, not {show.kind}")
+        _check_show(show, "seasons")
         response = self._fetch(f"tv/{show.tmdb_id}", {"language": "en-US"})
         seasons = [Season(int(row["id"]), row["season_number"], row["name"], row.get("air_date") or "")
                    for row in response["seasons"]]
         return sorted(seasons, key=lambda season: season.number)
+
+    def episodes(self, show, season_number):
+        """The Episodes of the show's Season season_number, in episode order."""
+        _check_show(show, "episodes")
+        response = self._fetch(f"tv/{show.tmdb_id}/season/{season_number}", {"language": "en-US"})
+        episodes = [Episode(row["episode_number"], row["name"], row.get("runtime"))
+                    for row in response["episodes"]]
+        return sorted(episodes, key=lambda episode: episode.number)
 
 
 # TMDB names the same facts differently for movies and shows.
@@ -99,6 +114,11 @@ _FIELDS = {
 def _check_kind(kind):
     if kind not in _FIELDS:
         raise ValueError(f"Unknown media type: {kind}")
+
+
+def _check_show(media, what):
+    if media.kind != "tv":
+        raise ValueError(f"Only TV shows have {what}, not {media.kind}")
 
 
 def _media(kind, row):

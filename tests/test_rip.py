@@ -178,8 +178,8 @@ class PlanRipTest(unittest.TestCase):
             library=Path(self.folder) / "How_to_Train_Your_Dragon"))
         self.assertTrue(got.folder.is_dir())
 
-    def test_tv_asks_for_title_year_show_season_and_a_range(self):
-        typed = ["", "Dragons", "", "44305", "55501", "1", "0", "2"]
+    def test_tv_asks_for_name_year_show_season_and_a_list_of_disc_titles(self):
+        typed = ["", "Dragons", "", "44305", "55501", "1", "0-2"]
         got = self.planRip(["-m", "tv"], typed, {
             "search/tv": {"total_results": 1, "results": [DRAGONS_SHOW]},
             "tv/44305": DRAGONS_SHOW | {"seasons": SEASONS},
@@ -258,21 +258,39 @@ class ShowDiscTitlesTest(unittest.TestCase):
 class ChooseDiscTitlesTest(unittest.TestCase):
     TITLES = [title(0), title(1), title(2), title(3)]
 
-    def choose(self, kind, typed):
-        with mock.patch("builtins.input", side_effect=typed), redirect_stdout(io.StringIO()):
-            return discripper.chooseDiscTitles(kind, self.TITLES)
+    def choose(self, kind, typed, titles=None):
+        self.out = io.StringIO()
+        with mock.patch("builtins.input", side_effect=typed), redirect_stdout(self.out):
+            return discripper.chooseDiscTitles(kind, self.TITLES if titles is None else titles)
 
     def test_a_movie_rips_the_one_title_typed(self):
         self.assertEqual(self.choose("movie", ["2"]), [title(2)])
 
-    def test_tv_rips_every_title_from_start_to_end(self):
-        self.assertEqual(self.choose("tv", ["1", "3"]), [title(1), title(2), title(3)])
+    def test_tv_rips_the_listed_disc_titles_and_ranges(self):
+        chosen = self.choose("tv", ["1-4,6"], titles=[title(n) for n in range(8)])
+
+        self.assertEqual(chosen, [title(1), title(2), title(3), title(4), title(6)])
+
+    def test_tv_asks_again_until_the_list_parses(self):
+        typed = ["", "two", "1-", "-2", "3-1", "1,,2", "1 2", "1.5", "1, 2 - 3"]
+
+        self.assertEqual(self.choose("tv", typed), [title(1), title(2), title(3)])
+
+    def test_tv_asks_again_when_a_number_is_not_in_the_table(self):
+        self.assertEqual(self.choose("tv", ["1-4", "9", "2"]), [title(2)])
+        self.assertIn("Not in the table: 4", self.out.getvalue())
+        self.assertIn("Not in the table: 9", self.out.getvalue())
+
+    def test_tv_range_far_past_the_table_is_asked_again(self):
+        self.assertEqual(self.choose("tv", ["1-99999999999", "1"]), [title(1)])
+        self.assertIn("Not in the table: 1-99999999999", self.out.getvalue())
+
+    def test_tv_disc_titles_come_back_in_title_number_order_once_each(self):
+        self.assertEqual(self.choose("tv", ["3,0-1,1"]), [title(0), title(1), title(3)])
 
     def test_anything_but_a_listed_number_is_asked_again(self):
         self.assertEqual(self.choose("movie", ["", "two", "9", "1"]), [title(1)])
 
-    def test_tv_end_before_start_is_asked_again(self):
-        self.assertEqual(self.choose("tv", ["2", "1", "2"]), [title(2)])
 
 
 if __name__ == "__main__":

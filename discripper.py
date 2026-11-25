@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import re
 import sys
 import shutil
 from dataclasses import dataclass
@@ -221,7 +222,7 @@ def parseArgs(argv):
     return parser.parse_args(argv)
 
 def chooseDiscTitles(kind, titles):
-    """Ask which Disc titles to rip: one for a movie, a first-to-last range for TV."""
+    """Ask which Disc titles to rip: one for a movie, a list such as "1-4,6" for TV."""
     showDiscTitles(titles)
     if kind == "movie":
         print("The title with the most chapters is probably the one you want to rip. ")
@@ -229,10 +230,54 @@ def chooseDiscTitles(kind, titles):
         print("differ in only a few segments usually differ just in the title card and credits.")
         print("A playlist with a (+duplicate) may be the disc's default copy; on Planes it was English.")
         return [askDiscTitle("Which single title would you like to rip? ", titles)]
-    start = askDiscTitle("Which title should START the rip? ", titles)
-    end = askDiscTitle("Which title should END the rip? ",
-                       [title for title in titles if title.number >= start.number])
-    return [title for title in titles if start.number <= title.number <= end.number]
+    return askDiscTitleList("Which titles would you like to rip, such as 1-4,6? ", titles)
+
+
+def askDiscTitleList(prompt, titles):
+    """Ask until a list of Disc title numbers and ranges, such as "1-4,6", names only titles in the table.
+
+    Returns those Disc titles in title-number order.
+    """
+    byNumber = {title.number: title for title in titles}
+    listed = ", ".join(str(number) for number in byNumber)
+    while True:
+        ranges = parseNumberList(input(prompt))
+        if ranges is None:
+            print("You need title numbers and ranges from the table, such as 1-4,6: " + listed)
+            continue
+        missing = [label for first, last in ranges for label in _missingLabels(first, last, byNumber)]
+        if missing:
+            print(f"Not in the table: {', '.join(missing)}. The titles are: {listed}")
+            continue
+        return [byNumber[number] for number in sorted(byNumber)
+                if any(first <= number <= last for first, last in ranges)]
+
+
+def _missingLabels(first, last, byNumber):
+    """Labels for the numbers from first to last that aren't in byNumber.
+
+    A range longer than the table must hold a missing number, so it's labelled whole, e.g. "1-999".
+    """
+    if last - first >= len(byNumber):
+        return [f"{first}-{last}"]
+    return [str(number) for number in range(first, last + 1) if number not in byNumber]
+
+
+_NUMBER_OR_RANGE = re.compile(r"(\d+)(?:\s*-\s*(\d+))?")
+
+
+def parseNumberList(typed):
+    """The (first, last) ranges in a list such as "1-4,6", or None if it isn't one."""
+    ranges = []
+    for part in typed.split(","):
+        match = _NUMBER_OR_RANGE.fullmatch(part.strip())
+        if not match:
+            return None
+        first, last = int(match[1]), int(match[2] or match[1])
+        if last < first:
+            return None
+        ranges.append((first, last))
+    return ranges
 
 
 @dataclass(frozen=True)

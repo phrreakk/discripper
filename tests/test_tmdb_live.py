@@ -40,6 +40,12 @@ class LiveTmdbTest(unittest.TestCase):
         self.assertEqual((seasons[1].name, seasons[1].air_date), ("Riders of Berk", "2012-08-07"))
         self.assertEqual((seasons[2].name, seasons[2].air_date), ("Defenders of Berk", "2013-09-19"))
 
+    def test_season_episodes_have_names(self):
+        episodes = {episode.number: episode for episode in self.lookup.episodes(DRAGONS_SHOW, 1)}
+
+        self.assertEqual(episodes[1].name, "How to Start a Dragon Academy")
+        self.assertEqual(episodes[20].name, "We Are Family (2)")
+
     def test_bad_token_becomes_lookup_failed(self):
         with self.assertRaises(LookupFailed) as raised:
             MediaLookup(tmdb_fetch("not-a-real-token")).get("movie", 10191)

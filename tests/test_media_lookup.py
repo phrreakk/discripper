@@ -7,7 +7,8 @@ import requests
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from media_lookup import (  # noqa: E402
-    LookupFailed, Media, MediaLookup, NoResults, SearchResult, Season, TooManyResults, tmdb_fetch)
+    Episode, LookupFailed, Media, MediaLookup, NoResults, SearchResult, Season, TooManyResults,
+    tmdb_fetch)
 from tests.tmdb_fixtures import ReplayTmdb  # noqa: E402
 
 
@@ -160,6 +161,43 @@ class SeasonsTest(unittest.TestCase):
             MediaLookup(FakeTmdb({})).seasons(Media("movie", 10191, "How to Train Your Dragon", "2010"))
 
 
+class EpisodesTest(unittest.TestCase):
+    SHOW = Media("tv", 44305, "DreamWorks Dragons", "2012")
+
+    def test_episodes_come_back_in_episode_order_with_names_and_runtimes(self):
+        tmdb = FakeTmdb({"tv/44305/season/1": {"episodes": [
+            {"episode_number": 2, "name": "Viking for Hire", "runtime": 22},
+            {"episode_number": 1, "name": "How to Start a Dragon Academy", "runtime": 23},
+        ]}})
+
+        episodes = MediaLookup(tmdb).episodes(self.SHOW, 1)
+
+        self.assertEqual(episodes, [
+            Episode(1, "How to Start a Dragon Academy", 23),
+            Episode(2, "Viking for Hire", 22),
+        ])
+        self.assertEqual(tmdb.calls, [("tv/44305/season/1", {"language": "en-US"})])
+
+    def test_an_episode_tmdb_has_no_runtime_for_has_none(self):
+        tmdb = FakeTmdb({"tv/44305/season/0": {"episodes": [
+            {"episode_number": 1, "name": "Gift of the Night Fury", "runtime": None},
+            {"episode_number": 2, "name": "Book of Dragons"},
+        ]}})
+
+        episodes = MediaLookup(tmdb).episodes(self.SHOW, 0)
+
+        self.assertEqual(episodes, [
+            Episode(1, "Gift of the Night Fury", None),
+            Episode(2, "Book of Dragons", None),
+        ])
+
+    def test_movies_have_no_episodes(self):
+        tmdb = FakeTmdb({})
+        with self.assertRaises(ValueError):
+            MediaLookup(tmdb).episodes(Media("movie", 10191, "How to Train Your Dragon", "2010"), 1)
+        self.assertEqual(tmdb.calls, [])
+
+
 class RecordedTmdbTest(unittest.TestCase):
     """Media lookup against real TMDB responses, recorded by scripts/record_tmdb_fixtures.py."""
 
@@ -191,6 +229,19 @@ class RecordedTmdbTest(unittest.TestCase):
             Season(53367, 1, "Riders of Berk", "2012-08-07"),
             Season(53368, 2, "Defenders of Berk", "2013-09-19"),
         ])
+
+    def test_season_episodes_come_back_numbered_with_names_and_runtimes(self):
+        show = Media("tv", 44305, "DreamWorks Dragons", "2012")
+
+        episodes = MediaLookup(ReplayTmdb("episodes_tv_44305_season_1")).episodes(show, 1)
+
+        self.assertEqual(len(episodes), 20)
+        self.assertEqual(episodes[:3], [
+            Episode(1, "How to Start a Dragon Academy", 22),
+            Episode(2, "Viking for Hire", 22),
+            Episode(3, "Animal House", 22),
+        ])
+        self.assertEqual(episodes[-1], Episode(20, "We Are Family (2)", 22))
 
 
 class TmdbFetchAdapterTest(unittest.TestCase):

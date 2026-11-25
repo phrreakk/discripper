@@ -22,7 +22,8 @@ from tests.tmdb_key import KEY_NAME, key_file, tmdb_read_key  # noqa: E402
 # The only TMDB fields Media lookup reads; everything else is dropped. If Media lookup
 # starts reading a new field, add it here and re-record.
 FIELDS_MEDIA_LOOKUP_READS = {"total_results", "results", "id", "popularity", "original_title", "release_date",
-        "original_name", "first_air_date", "seasons", "season_number", "name", "air_date"}
+        "original_name", "first_air_date", "seasons", "season_number", "name", "air_date",
+        "episodes", "episode_number", "runtime"}
 
 SCENARIOS = {
     "find_movie_how_to_train_your_dragon_2010":
@@ -30,6 +31,8 @@ SCENARIOS = {
     "get_movie_10191": lambda lookup: lookup.get("movie", 10191),
     "find_tv_dreamworks_dragons": lambda lookup: lookup.find("tv", "DreamWorks Dragons", ""),
     "seasons_tv_44305": lambda lookup: lookup.seasons(Media("tv", 44305, "DreamWorks Dragons", "2012")),
+    "episodes_tv_44305_season_1":
+        lambda lookup: lookup.episodes(Media("tv", 44305, "DreamWorks Dragons", "2012"), 1),
 }
 
 
