@@ -71,6 +71,7 @@ def getDiscInfo(folder, title):
 
 def getMediaInfo(title, year):
     mediaSeasonId = ""
+    mediaSeason = ""
     if args.media == "movie":
       if args.tmdbid is None:
         searchTitle = "%20".join(title.split())
@@ -158,7 +159,7 @@ def getMediaInfo(title, year):
                 if args.media == "movie":
                     mediaTitle = next((sub['original_title'] for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)
                     mediaYear = next((sub.get('release_date', '') for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)
-                    return mediaId, mediaTitle, mediaYear
+                    return mediaId, mediaTitle, mediaYear, mediaSeason
                 elif args.media == "tv":
                     mediaTitle = next((sub['original_name'] for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)
                     mediaYear = next((sub.get('first_air_date', '') for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)

@@ -46,6 +46,27 @@ class MovieSearchTest(unittest.TestCase):
         self.assertEqual(found[1], "How to Train Your Dragon: Fan Cut")
         self.assertEqual(found[2], "")
 
+    def test_search_returns_id_title_year_and_season_for_main(self):
+        results = [{"id": 10191, "original_title": "How to Train Your Dragon",
+                    "release_date": "2010-03-18", "popularity": 50.0}]
+
+        found, _ = self.search(results, 10191)
+
+        self.assertEqual(found, ("10191", "How to Train Your Dragon", "2010-03-18", ""))
+
+
+class MovieLookupByTmdbIdTest(unittest.TestCase):
+    def test_lookup_returns_id_title_year_and_season_for_main(self):
+        discripper.args = argparse.Namespace(media="movie", tmdbid=10191)
+        discripper.dotenv = {"TMDB_API_KEY": "test-key"}
+        detail = {"id": 10191, "original_title": "How to Train Your Dragon",
+                  "release_date": "2010-03-18"}
+
+        with mock.patch.object(discripper.requests, "get", return_value=fake_tmdb_response(detail)):
+            found = discripper.getMediaInfo(None, None)
+
+        self.assertEqual(found, (10191, "How to Train Your Dragon", "2010-03-18", ""))
+
 
 class TvSearchTest(unittest.TestCase):
     def setUp(self):
