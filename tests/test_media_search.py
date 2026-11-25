@@ -55,6 +55,23 @@ class MovieSearchTest(unittest.TestCase):
         self.assertEqual(found, ("10191", "How to Train Your Dragon", "2010-03-18", ""))
 
 
+class TmdbRequestFailureTest(unittest.TestCase):
+    def test_failed_request_exits_with_message_instead_of_crashing(self):
+        discripper.args = argparse.Namespace(media="movie", tmdbid=None)
+        discripper.dotenv = {"TMDB_API_KEY": "bad-key"}
+        failing = mock.Mock()
+        failing.raise_for_status.side_effect = discripper.HTTPError("401 Client Error: Unauthorized")
+        out = io.StringIO()
+
+        with mock.patch.object(discripper.requests, "get", return_value=failing), \
+             redirect_stdout(out), \
+             self.assertRaises(SystemExit) as exit:
+            discripper.getMediaInfo("How to train your dragon", "")
+
+        self.assertEqual(exit.exception.code, 1)
+        self.assertIn("401 Client Error", out.getvalue())
+
+
 class MovieLookupByTmdbIdTest(unittest.TestCase):
     def test_lookup_returns_id_title_year_and_season_for_main(self):
         discripper.args = argparse.Namespace(media="movie", tmdbid=10191)
