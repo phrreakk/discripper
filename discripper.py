@@ -99,6 +99,8 @@ def getMediaInfo(title, year):
 
       else:
         url = "https://api.themoviedb.org/3/tv/" + str(args.tmdbid) + "?language=en-US"
+    else:
+      raise ValueError(f"Unknown media type: {args.media}")
       
     # Debug
     # print(f"URL: {url}")
@@ -113,8 +115,10 @@ def getMediaInfo(title, year):
         response.raise_for_status()
     except HTTPError as http_err:
         print(f"HTTP error occurred: {http_err}")
+        sys.exit(1)
     except Exception as err:
         print(f"Other error occurred: {err}")
+        sys.exit(1)
     else:
         responseDict = response.json()
     
@@ -177,8 +181,10 @@ def getMediaInfo(title, year):
                             response.raise_for_status()
                         except HTTPError as http_err:
                             print(f"HTTP error occurred: {http_err}")
+                            sys.exit(1)
                         except Exception as err:
                             print(f"Other error occurred: {err}")
+                            sys.exit(1)
                         else:
                             responseDict = response.json()
                             # print(responseDict["seasons"])
@@ -215,13 +221,19 @@ def ripFullMkv(folder, title):
     print("Ripping...Please wait...")
     
     # Info returns different results with -r and without
+    ripFileName = None
     process = subprocess.Popen([pathRipApp, '-r', 'info', 'disc:0'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     for line in process.stdout: 
         search = re.search(rf'^TINFO:{title},27,0,\"(.+)\"', line)
         if search:
             ripFileName = search.group(1)
             # print(f"Match found: {ripFileName}")
-    
+
+    if ripFileName is None:
+        print(f"makemkvcon did not report a file name for title {title}.")
+        print("Check the title number against the list shown earlier, and that the disc is still in the drive.")
+        sys.exit(1)
+
     if not os.path.isfile(folder + "/" + ripFileName):
         with open(folder + "/" + "/makemkvrip.log", "w") as file:
             process = subprocess.Popen([pathRipApp, 'mkv', '--cache=2048', '--noscan', '--minlength=300', '-r', 'disc:0', title, folder], stdout=file, stderr=file)
@@ -312,6 +324,8 @@ def encodeFullMkv(fullRipPath, title, year, tmdbid, parentFolder, season):
         # Debug
         # print(outputTranscodePath4k)
         # print(outputTranscodePath1080p)
+    else:
+        raise ValueError(f"Unknown media type: {args.media}")
 
     # encodeCmd = f"{pathTranscodeApp} -Z {preset4k} -e {encoder} -i {fullRipPath} -o '{transcodePath}/{title} {year} {tmdbID} - 2160p.mkv'"
     # print(f"4K Command: {encodeCmd}")
