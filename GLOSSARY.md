@@ -15,8 +15,11 @@ _Avoid_: title
 **Season**:
 One season of a TV show, as TMDB lists it. Specials are season 0.
 
+**Episode**:
+One episode of a Season, as TMDB lists it, with a number, a name and a runtime. TMDB sometimes has no runtime.
+
 **Media lookup**:
-Finding Media and Seasons on TMDB, by search or by TMDB id.
+Finding Media, Seasons and Episodes on TMDB, by search or by TMDB id.
 _Avoid_: media info, search (when lookup by id is meant too)
 
 **Disc title**:

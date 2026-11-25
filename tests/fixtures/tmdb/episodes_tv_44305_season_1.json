@@ -1,0 +1,176 @@
+[
+  {
+    "path": "tv/44305/season/1",
+    "params": {
+      "language": "en-US"
+    },
+    "response": {
+      "id": 53367,
+      "air_date": "2012-08-07",
+      "episodes": [
+        {
+          "air_date": "2012-08-07",
+          "episode_number": 1,
+          "id": 892658,
+          "name": "How to Start a Dragon Academy",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2012-08-07",
+          "episode_number": 2,
+          "id": 892669,
+          "name": "Viking for Hire",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2012-09-04",
+          "episode_number": 3,
+          "id": 892670,
+          "name": "Animal House",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2012-09-11",
+          "episode_number": 4,
+          "id": 892671,
+          "name": "The Terrible Twos",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2012-09-18",
+          "episode_number": 5,
+          "id": 892660,
+          "name": "In Dragons We Trust",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2012-09-25",
+          "episode_number": 6,
+          "id": 892659,
+          "name": "Alvin and the Outcasts",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2012-10-03",
+          "episode_number": 7,
+          "id": 892666,
+          "name": "How to Pick Your Dragon",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2012-10-10",
+          "episode_number": 8,
+          "id": 892667,
+          "name": "Portrait of Hiccup as a Buff Man",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2012-10-17",
+          "episode_number": 9,
+          "id": 892672,
+          "name": "Dragon Flower",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2012-11-14",
+          "episode_number": 10,
+          "id": 892661,
+          "name": "Heather Report (1)",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2012-11-21",
+          "episode_number": 11,
+          "id": 892657,
+          "name": "Heather Report (2)",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2012-11-28",
+          "episode_number": 12,
+          "id": 892662,
+          "name": "Thawfest",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2012-12-05",
+          "episode_number": 13,
+          "id": 892673,
+          "name": "When Lightning Strikes",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2013-02-06",
+          "episode_number": 14,
+          "id": 892665,
+          "name": "What Flies Beneath",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2013-02-13",
+          "episode_number": 15,
+          "id": 892668,
+          "name": "Twinsanity",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2013-02-20",
+          "episode_number": 16,
+          "id": 892674,
+          "name": "Defiant One",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2013-02-27",
+          "episode_number": 17,
+          "id": 892664,
+          "name": "Breakneck Bog",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2013-03-06",
+          "episode_number": 18,
+          "id": 892663,
+          "name": "Gem of a Different Color",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2013-03-13",
+          "episode_number": 19,
+          "id": 892675,
+          "name": "We Are Family (1)",
+          "runtime": 22,
+          "season_number": 1
+        },
+        {
+          "air_date": "2013-03-20",
+          "episode_number": 20,
+          "id": 892676,
+          "name": "We Are Family (2)",
+          "runtime": 22,
+          "season_number": 1
+        }
+      ],
+      "name": "Riders of Berk",
+      "season_number": 1
+    }
+  }
+]
