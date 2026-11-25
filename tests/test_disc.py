@@ -92,6 +92,40 @@ class TitlesTest(unittest.TestCase):
         self.assertIn("TCOUNT:2", log.read_text(encoding="utf-8"))
 
 
+class LabelTest(unittest.TestCase):
+    def setUp(self):
+        self.folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
+
+    def label_of(self, text):
+        disc = Disc(info(text))
+        log = self.folder / "info.log"
+        disc.titles(log)
+        return disc.label(log)
+
+    def test_the_label_is_the_volume_label_not_the_display_name(self):
+        # These two CINFO lines are copied from the Planes (2013) disc.
+        text = 'CINFO:2,0,"Planes"\nCINFO:32,0,"PLANES"\nTINFO:0,27,0,"title_t00.mkv"\n'
+
+        self.assertEqual(self.label_of(text), "PLANES")
+
+    def test_each_disc_of_a_tv_set_has_its_own_label_though_its_rips_share_file_names(self):
+        # Recorded from The Transformers Season 1 disc 1, trimmed to disc, title and stream lines.
+        text = (FIXTURES / "info_transformers_g1_s1_d1.txt").read_text(encoding="utf-8")
+        disc = Disc(info(text))
+        log = self.folder / "info.log"
+
+        titles = disc.titles(log)
+
+        self.assertEqual(disc.label(log), "TRANSFORMERS_G1_S1_D1")
+        self.assertEqual([t.file_name for t in titles], [f"B1_t{n:02d}.mkv" for n in range(8)])
+
+    def test_a_disc_without_a_volume_label_has_no_label(self):
+        text = 'CINFO:2,0,"Planes"\nCINFO:32,0,""\nTINFO:0,27,0,"title_t00.mkv"\n'
+
+        self.assertIsNone(self.label_of(text))
+        self.assertIsNone(self.label_of('TINFO:0,27,0,"title_t00.mkv"\n'))
+
+
 class RipTest(unittest.TestCase):
     def setUp(self):
         self.folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
