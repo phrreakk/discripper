@@ -165,6 +165,22 @@ class PlanRipTest(unittest.TestCase):
         self.assertIn("makemkvinfo.log", self.out.getvalue())
 
 
+class ShowDiscTitlesTest(unittest.TestCase):
+    def test_the_table_shows_each_titles_playlist_and_segment_map(self):
+        english = DiscTitle(number=0, file_name="title_t00.mkv", duration="1:31:40", chapters=16,
+                            size="25.1 GB", playlist="00800.mpls", segments="1-4,9")
+        out = io.StringIO()
+
+        with redirect_stdout(out):
+            discripper.showDiscTitles([english])
+
+        header, row = [line for line in out.getvalue().splitlines() if line.startswith("|")]
+        self.assertIn("Playlist", header)
+        self.assertIn("Segments", header)
+        self.assertIn("00800.mpls", row)
+        self.assertIn("1-4,9", row)
+
+
 class ChooseDiscTitlesTest(unittest.TestCase):
     TITLES = [title(0), title(1), title(2), title(3)]
 

@@ -48,6 +48,18 @@ class TitlesTest(unittest.TestCase):
                       chapters=1, size="1.1 GB"),
         ])
 
+    def test_each_title_also_carries_its_playlist_and_segment_map(self):
+        # Two language versions of one movie: same length, different opening segment.
+        text = ('TINFO:0,9,0,"1:31:40"\nTINFO:0,16,0,"00800.mpls"\nTINFO:0,26,0,"1-4,9"\n'
+                'TINFO:0,27,0,"title_t00.mkv"\n'
+                'TINFO:1,9,0,"1:31:40"\nTINFO:1,16,0,"00801.mpls"\nTINFO:1,26,0,"5,2-4,9"\n'
+                'TINFO:1,27,0,"title_t01.mkv"\n')
+
+        titles = Disc(info(text)).titles(self.folder / "info.log")
+
+        self.assertEqual([(t.playlist, t.segments) for t in titles],
+                         [("00800.mpls", "1-4,9"), ("00801.mpls", "5,2-4,9")])
+
     def test_no_drive_means_no_titles(self):
         no_drive = (FIXTURES / "info_no_drive.txt").read_text(encoding="utf-8")
 

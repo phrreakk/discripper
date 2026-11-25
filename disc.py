@@ -20,6 +20,8 @@ MIN_LENGTH = 300
 _CHAPTERS = 8
 _DURATION = 9
 _SIZE = 10
+_PLAYLIST = 16
+_SEGMENTS = 26
 _FILE_NAME = 27
 
 _TINFO = re.compile(r'^TINFO:(\d+),(\d+),\d+,"(.*)"$')
@@ -32,6 +34,11 @@ class DiscTitle:
     duration: str
     chapters: int
     size: str
+    # The disc file the title plays (a Blu-ray .mpls playlist), and the video
+    # segments it plays in order. Language versions of one movie share a length
+    # but differ in a segment or two, such as a localized title card.
+    playlist: str = ""
+    segments: str = ""
 
 
 class RipFailed(Exception):
@@ -61,7 +68,9 @@ class Disc:
                           file_name=found[_FILE_NAME],
                           duration=found.get(_DURATION, ""),
                           chapters=int(found.get(_CHAPTERS, "0")),
-                          size=found.get(_SIZE, ""))
+                          size=found.get(_SIZE, ""),
+                          playlist=found.get(_PLAYLIST, ""),
+                          segments=found.get(_SEGMENTS, ""))
                 for number, found in sorted(attributes.items())
                 # A Disc title with no file name can't be ripped, so it isn't offered.
                 if _FILE_NAME in found]

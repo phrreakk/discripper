@@ -39,10 +39,11 @@ def getRequirements():
 
 def showDiscTitles(titles):
     table = PrettyTable()
-    table.field_names = ["Title", "Duration", "Chapters", "Size", "File"]
+    table.field_names = ["Title", "Duration", "Chapters", "Size", "Playlist", "Segments", "File"]
     table.align = "l"
     for title in titles:
-        table.add_row([title.number, title.duration, title.chapters, title.size, title.file_name])
+        table.add_row([title.number, title.duration, title.chapters, title.size, title.playlist,
+                       title.segments, title.file_name])
     print(table)
 
 
@@ -196,6 +197,8 @@ def chooseDiscTitles(kind, titles):
     showDiscTitles(titles)
     if kind == "movie":
         print("The title with the most chapters is probably the one you want to rip. ")
+        print("Titles with the same length but different Segments are usually language versions;")
+        print("their opening title card or credits differ.")
         return [askDiscTitle("Which single title would you like to rip? ", titles)]
     start = askDiscTitle("Which title should START the rip? ", titles)
     end = askDiscTitle("Which title should END the rip? ",
