@@ -14,6 +14,10 @@ import library_layout
 from media_lookup import LookupFailed, MediaLookup, NoResults, TooManyResults, tmdb_fetch
 
 
+# HandBrake encoders --encoder accepts: Intel QSV (the default), NVIDIA NVENC, and software x265.
+ENCODERS = ["qsv_h265_10bit", "nvenc_h265_10bit", "x265_10bit"]
+
+
 def loadEnvFile():
     global dotenv
     dotenv = dotenv_values(".env")
@@ -185,20 +189,18 @@ def ripFullMkv(folder, title):
             sys.exit(1)
     
 
-def encodeFullMkv(fullRipPath, media, parentFolder, season):
+def encodeFullMkv(fullRipPath, media, parentFolder, season, encoder):
     """Encode one rip into the Library layout under parentFolder.
 
-    season is the Season number for TV and None for a movie.
+    season is the Season number for TV and None for a movie. encoder is the
+    HandBrake video encoder (one of ENCODERS) used for every encode.
     """
-    # encoder = "nvenc_h265_10bit"
-    encoder = "qsv_h265_10bit"
     preset4k = "H.265 MKV 2160p60 4K"
     preset1080p = "H.265 MKV 1080p30"
     encodeFullFile4k = ""
     encodeFullFile1080p = ""
     found = 0
     episodeNum = None
-    # preset2 = "H.265 NVENC 2160p 4K"
     transcodePath = os.path.join(parentFolder, library_layout.folder_for(media, season))
     if not os.path.isdir(transcodePath):
         os.makedirs(transcodePath)
@@ -230,8 +232,6 @@ def encodeFullMkv(fullRipPath, media, parentFolder, season):
     outputTranscodePath4k = os.path.join(parentFolder, library_layout.path_for(media, "4k", season, episodeNum))
     outputTranscodePath1080p = os.path.join(parentFolder, library_layout.path_for(media, "1080p", season, episodeNum))
 
-    # encodeCmd = f"{pathTranscodeApp} -Z {preset4k} -e {encoder} -i {fullRipPath} -o '{transcodePath}/{title} {year} {tmdbID} - 2160p.mkv'"
-    # print(f"4K Command: {encodeCmd}")
     
     if args.format in ['4k', 'all']:
         print("Encoding 4k file...Please wait...")
@@ -290,11 +290,8 @@ def encodeFullMkv(fullRipPath, media, parentFolder, season):
     
     return encodeFullFile4k, encodeFullFile1080p
     
-def main():
-    loadEnvFile()
-    
-    global args
-    # Parse command line arguments
+def parseArgs(argv):
+    """Parse discripper's command line arguments."""
     parser = argparse.ArgumentParser(
         prog='discripper',
         description='This program is a wrapper around makemkvcon and Handbrake while also receiving media data from TMDB API'
@@ -304,9 +301,18 @@ def main():
     parser.add_argument("-y", "--year", type=int, help="Release year of the media")
     parser.add_argument("-f", "--format", default='all', choices=['4k', '1080p', 'all'], help="Format of the output file(s).")
     parser.add_argument("-m", "--media", default='movie', choices=['movie', 'tv'], help="Media format of movie or tv.")
+    parser.add_argument("--encoder", default=ENCODERS[0], choices=ENCODERS,
+                        help="HandBrake video encoder for every encode (default: %(default)s).")
     parser.add_argument("--tmdbid", type=int, help="The Movie DB ID of the media")
     parser.add_argument("FOLDER", help="Root directory for the ripped media")
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def main():
+    loadEnvFile()
+    
+    global args
+    args = parseArgs(sys.argv[1:])
     
     # Debug
     # print(f"Title: {args.title}")
@@ -381,7 +387,7 @@ def main():
         ripFile = ripFullMkv(ripFolder, discTitle)
         fullRipFile = ripFolder + "/" + ripFile
         print(f"Rip completed: {fullRipFile}")
-        encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, media, ripFolder, season.number if season else None)
+        encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, media, ripFolder, season.number if season else None, args.encoder)
         if args.format in ['4k', 'all']:
             print(f"Encode completed: {encodeFullPath4k}")
         if args.format in ['1080p', 'all']:
@@ -393,7 +399,7 @@ def main():
             ripFile = ripFullMkv(ripFolder, str(title))
             fullRipFile = ripFolder + "/" + ripFile
             print(f"Rip completed: {fullRipFile}")
-            encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, media, ripFolder, season.number if season else None)
+            encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, media, ripFolder, season.number if season else None, args.encoder)
             if args.format in ['4k', 'all']:
                 print(f"Encode completed: {encodeFullPath4k}")
             if args.format in ['1080p', 'all']:
