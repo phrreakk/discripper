@@ -16,9 +16,10 @@ class EncoderOptionTest(unittest.TestCase):
 
     def test_encoder_can_be_nvidia_nvenc_or_software_x265(self):
         for encoder in ["nvenc_h265_10bit", "x265_10bit"]:
-            args = discripper.parseArgs(["--encoder", encoder, "/media"])
+            with self.subTest(encoder=encoder):
+                args = discripper.parseArgs(["--encoder", encoder, "/media"])
 
-            self.assertEqual(args.encoder, encoder)
+                self.assertEqual(args.encoder, encoder)
 
     def test_encoder_outside_the_list_is_refused(self):
         err = io.StringIO()

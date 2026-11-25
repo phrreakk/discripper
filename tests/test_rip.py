@@ -43,10 +43,13 @@ class RipFullMkvTest(unittest.TestCase):
 
 class EncodeFullMkvTest(unittest.TestCase):
     def setUp(self):
-        discripper.pathTranscodeApp = "/usr/bin/HandBrakeCLI"
-        discripper.args = argparse.Namespace(format="all")
+        for name, value in [("pathTranscodeApp", "/usr/bin/HandBrakeCLI"),
+                            ("args", argparse.Namespace(format="all"))]:
+            patcher = mock.patch.object(discripper, name, value, create=True)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
-    def test_chosen_encoder_goes_to_both_the_4k_and_1080p_transcodes(self):
+    def test_chosen_encoder_goes_to_both_the_4k_and_1080p_encodes(self):
         commands = []
 
         def fake_handbrake(command, stdout, stderr):

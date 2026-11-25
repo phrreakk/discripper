@@ -14,7 +14,7 @@ import library_layout
 from media_lookup import LookupFailed, MediaLookup, NoResults, TooManyResults, tmdb_fetch
 
 
-# HandBrake encoders --encoder accepts: Intel QSV, NVIDIA NVENC, and software x265.
+# HandBrake encoders --encoder accepts: Intel QSV (the default), NVIDIA NVENC, and software x265.
 ENCODERS = ["qsv_h265_10bit", "nvenc_h265_10bit", "x265_10bit"]
 
 
@@ -193,7 +193,7 @@ def encodeFullMkv(fullRipPath, media, parentFolder, season, encoder):
     """Encode one rip into the Library layout under parentFolder.
 
     season is the Season number for TV and None for a movie. encoder is the
-    HandBrake video encoder (one of ENCODERS) used for every transcode.
+    HandBrake video encoder (one of ENCODERS) used for every encode.
     """
     preset4k = "H.265 MKV 2160p60 4K"
     preset1080p = "H.265 MKV 1080p30"
@@ -201,7 +201,6 @@ def encodeFullMkv(fullRipPath, media, parentFolder, season, encoder):
     encodeFullFile1080p = ""
     found = 0
     episodeNum = None
-    # preset2 = "H.265 NVENC 2160p 4K"
     transcodePath = os.path.join(parentFolder, library_layout.folder_for(media, season))
     if not os.path.isdir(transcodePath):
         os.makedirs(transcodePath)
@@ -233,8 +232,6 @@ def encodeFullMkv(fullRipPath, media, parentFolder, season, encoder):
     outputTranscodePath4k = os.path.join(parentFolder, library_layout.path_for(media, "4k", season, episodeNum))
     outputTranscodePath1080p = os.path.join(parentFolder, library_layout.path_for(media, "1080p", season, episodeNum))
 
-    # encodeCmd = f"{pathTranscodeApp} -Z {preset4k} -e {encoder} -i {fullRipPath} -o '{transcodePath}/{title} {year} {tmdbID} - 2160p.mkv'"
-    # print(f"4K Command: {encodeCmd}")
     
     if args.format in ['4k', 'all']:
         print("Encoding 4k file...Please wait...")
@@ -304,8 +301,8 @@ def parseArgs(argv):
     parser.add_argument("-y", "--year", type=int, help="Release year of the media")
     parser.add_argument("-f", "--format", default='all', choices=['4k', '1080p', 'all'], help="Format of the output file(s).")
     parser.add_argument("-m", "--media", default='movie', choices=['movie', 'tv'], help="Media format of movie or tv.")
-    parser.add_argument("--encoder", default='qsv_h265_10bit', choices=ENCODERS,
-                        help="HandBrake video encoder for every transcode (default: %(default)s).")
+    parser.add_argument("--encoder", default=ENCODERS[0], choices=ENCODERS,
+                        help="HandBrake video encoder for every encode (default: %(default)s).")
     parser.add_argument("--tmdbid", type=int, help="The Movie DB ID of the media")
     parser.add_argument("FOLDER", help="Root directory for the ripped media")
     return parser.parse_args(argv)

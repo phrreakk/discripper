@@ -75,7 +75,7 @@ options:
   -m, --media {movie,tv}
                         Media format of movie or tv.
   --encoder {qsv_h265_10bit,nvenc_h265_10bit,x265_10bit}
-                        HandBrake video encoder for every transcode (default:
+                        HandBrake video encoder for every encode (default:
                         qsv_h265_10bit).
   --tmdbid TMDBID       The Movie DB ID of the media
 ```
