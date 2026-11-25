@@ -22,3 +22,11 @@ _Avoid_: media info, search (when lookup by id is meant too)
 **Disc title**:
 A numbered title that makemkvcon reports on the disc in the drive; one disc holds several.
 _Avoid_: title (on its own), track
+
+**Library layout**:
+The folders and file names Jellyfin expects, so it can match each encoded file to its Media on TMDB.
+_Avoid_: naming scheme, folder structure
+
+**Format**:
+The resolution an encode is made at: 4k (labelled 2160p in file names) or 1080p. One rip can be encoded in both.
+_Avoid_: version, quality

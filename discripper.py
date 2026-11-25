@@ -10,6 +10,7 @@ import argparse
 import json
 from dotenv import load_dotenv, dotenv_values
 from prettytable import PrettyTable
+import library_layout
 from media_lookup import LookupFailed, MediaLookup, NoResults, TooManyResults, tmdb_fetch
 
 
@@ -169,22 +170,11 @@ def ripFullMkv(folder, title):
             sys.exit(1)
     
 
-def encodeFullMkv(fullRipPath, title, year, tmdbid, parentFolder, season):
-    # encodeFullMkv(fullRipFile, mediaYear[:4], mediaId, ripFolder)
-    # TODO:
-    #     Create folder structure for jellyfin
-    #         Best_Movie_Ever (YEAR) [tmdbid-ID]
-    #     Create handbrake files off of jellyfin/tmdb id
-    #         MOVIE (YEAR) [tmdbid-ID] - 2160p.mp4
-    #         MOVIE (YEAR) [tmdbid-ID] - 1080p.mp4
-    #     Create file 4k
-    #     Create file 1080p
+def encodeFullMkv(fullRipPath, media, parentFolder, season):
+    """Encode one rip into the Library layout under parentFolder.
 
-    if season < 10:
-        season = "0" + str(season)
-    title = "_".join(title.split())
-    year = f"({year})"
-    tmdbID = f"[tmdbid-{tmdbid}]"
+    season is the Season number for TV and None for a movie.
+    """
     # encoder = "nvenc_h265_10bit"
     encoder = "qsv_h265_10bit"
     preset4k = "H.265 MKV 2160p60 4K"
@@ -192,21 +182,13 @@ def encodeFullMkv(fullRipPath, title, year, tmdbid, parentFolder, season):
     encodeFullFile4k = ""
     encodeFullFile1080p = ""
     found = 0
-    episodeNum = 0
+    episodeNum = None
     # preset2 = "H.265 NVENC 2160p 4K"
-    if args.media == "movie":
-        transcodePath = parentFolder + "/" + title + " " + year + " " + tmdbID
-        if not os.path.isdir(transcodePath):
-            os.makedirs(transcodePath)
-        outputTranscodePath4k = f"{transcodePath}/{title} {year} {tmdbID} - 2160p.mkv"
-        outputTranscodePath1080p = f"{transcodePath}/{title} {year} {tmdbID} - 1080p.mkv"
-    elif args.media == "tv":
-        transcodePath = parentFolder + "/" + title + " " + year + " " + tmdbID + "/" + "Season" + " " + str(season)
-        if not os.path.isdir(transcodePath):
-            os.makedirs(transcodePath)
-        # Debug
-        # print("Full path: " + fullRipPath)
-        # print("Transcode: " + transcodePath)
+    transcodePath = os.path.join(parentFolder, library_layout.folder_for(media, season))
+    if not os.path.isdir(transcodePath):
+        os.makedirs(transcodePath)
+    if media.kind == "tv":
+        episodeNum = 0
         if os.path.exists(transcodePath + "/" + "episode.list"):
             with open(transcodePath + "/" + "episode.list", 'r') as file:
                 for line in file:
@@ -215,10 +197,6 @@ def encodeFullMkv(fullRipPath, title, year, tmdbid, parentFolder, season):
                         if fullRipPath[-20:] in line:
                             print("Episode already exists in the file.")
                             found = 1
-                            # Debug
-                            # print("Found: " + str(found))
-                            # print("Line: " + line)
-                            # print("Full Rip Path: " + fullRipPath[-20:])
             if found == 0:
                 # Write the string to the file
                 with open(transcodePath + "/" + "episode.list", 'a') as file:
@@ -227,22 +205,15 @@ def encodeFullMkv(fullRipPath, title, year, tmdbid, parentFolder, season):
             # Write the string to the file
             with open(transcodePath + "/" + "episode.list", 'w') as file:
                 file.write(fullRipPath + '\n')
-        
+
         if found == 0:
             # How many episodes are there so far
             with open(transcodePath + "/" + "episode.list", 'r') as f:
                 episodeNum = sum(1 for line in f)
             print('Total number of episodes:', episodeNum)
-        
-        if episodeNum < 10:
-            episodeNum = "0" + str(episodeNum)
-        outputTranscodePath4k = f"{transcodePath}/{title} S{season}E{episodeNum}.mkv"
-        outputTranscodePath1080p = f"{transcodePath}/{title} S{season}E{episodeNum}.mkv"
-        # Debug
-        # print(outputTranscodePath4k)
-        # print(outputTranscodePath1080p)
-    else:
-        raise ValueError(f"Unknown media type: {args.media}")
+
+    outputTranscodePath4k = os.path.join(parentFolder, library_layout.path_for(media, "4k", season, episodeNum))
+    outputTranscodePath1080p = os.path.join(parentFolder, library_layout.path_for(media, "1080p", season, episodeNum))
 
     # encodeCmd = f"{pathTranscodeApp} -Z {preset4k} -e {encoder} -i {fullRipPath} -o '{transcodePath}/{title} {year} {tmdbID} - 2160p.mkv'"
     # print(f"4K Command: {encodeCmd}")
@@ -363,7 +334,6 @@ def main():
     # Get movie/show info
     lookup = MediaLookup(tmdb_fetch(dotenv["TMDB_API_KEY"]))
     media, season = chooseMedia(lookup, args.media, mediaTitle, mediaYear, args.tmdbid)
-    seasonNumber = season.number if season else 0
 
     mediaFolder = args.FOLDER
     if not os.path.isdir(mediaFolder):
@@ -373,7 +343,6 @@ def main():
     # print(f"ID: {media.tmdb_id}")
     # print(f"Title: {media.name}")
     # print(f"Year: {media.year}")
-    # print(f"Season: {seasonNumber}")
     # sys.exit(0)
     
     getDiscInfo(mediaFolder, media.name)
@@ -404,19 +373,19 @@ def main():
         ripFile = ripFullMkv(ripFolder, discTitle)
         fullRipFile = ripFolder + "/" + ripFile
         print(f"Rip completed: {fullRipFile}")
-        encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, media.name, media.year, media.tmdb_id, ripFolder, seasonNumber)
+        encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, media, ripFolder, season.number if season else None)
         if args.format in ['4k', 'all']:
             print(f"Encode completed: {encodeFullPath4k}")
         if args.format in ['1080p', 'all']:
             print(f"Encode completed: {encodeFullPath1080p}")
     elif args.media == "tv":
         ripFolder = mediaFolder + "/" + "_".join(media.name.split())
-        print(f"We are going to rip {media.name} - Season {seasonNumber} ({media.year}) with TMDBID [tmdbid-{media.tmdb_id}] to {ripFolder}")
+        print(f"We are going to rip {media.name} - Season {season.number} ({media.year}) with TMDBID [tmdbid-{media.tmdb_id}] to {ripFolder}")
         for title in range(int(startDiscTitle), int(endDiscTitle) + 1):
             ripFile = ripFullMkv(ripFolder, str(title))
             fullRipFile = ripFolder + "/" + ripFile
             print(f"Rip completed: {fullRipFile}")
-            encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, media.name, media.year, media.tmdb_id, ripFolder, seasonNumber)
+            encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, media, ripFolder, season.number if season else None)
             if args.format in ['4k', 'all']:
                 print(f"Encode completed: {encodeFullPath4k}")
             if args.format in ['1080p', 'all']:
