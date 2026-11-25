@@ -1,0 +1,7 @@
+Search: How to train your dragon with no date
+Response: 200 but it returns items with no release_date building the table around line 119
+
+Need to work on bringing in Seasons of TV
+
+Ability to switch encoders...at line 186 and 187
+Need to create a parameter to the help file for encoder
