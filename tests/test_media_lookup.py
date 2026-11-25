@@ -8,6 +8,7 @@ import requests
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from media_lookup import (  # noqa: E402
     LookupFailed, Media, MediaLookup, NoResults, SearchResult, Season, TooManyResults, tmdb_fetch)
+from tests.tmdb_fixtures import ReplayTmdb  # noqa: E402
 
 
 class FakeTmdb:
@@ -157,6 +158,39 @@ class SeasonsTest(unittest.TestCase):
     def test_movies_have_no_seasons(self):
         with self.assertRaises(ValueError):
             MediaLookup(FakeTmdb({})).seasons(Media("movie", 10191, "How to Train Your Dragon", "2010"))
+
+
+class RecordedTmdbTest(unittest.TestCase):
+    """Media lookup against real TMDB responses, recorded by scripts/record_tmdb_fixtures.py."""
+
+    def test_movie_search_with_year_puts_the_movie_first(self):
+        found = MediaLookup(ReplayTmdb("find_movie_how_to_train_your_dragon_2010")).find(
+            "movie", "How to Train Your Dragon", 2010)
+
+        self.assertEqual(found[0].media, Media("movie", 10191, "How to Train Your Dragon", "2010"))
+        self.assertTrue(all(result.media.year == "2010" for result in found))
+
+    def test_movie_by_tmdb_id(self):
+        media = MediaLookup(ReplayTmdb("get_movie_10191")).get("movie", 10191)
+
+        self.assertEqual(media, Media("movie", 10191, "How to Train Your Dragon", "2010"))
+
+    def test_show_search_finds_the_show_among_other_dragons_shows(self):
+        found = MediaLookup(ReplayTmdb("find_tv_dreamworks_dragons")).find("tv", "DreamWorks Dragons", "")
+
+        self.assertIn(Media("tv", 44305, "DreamWorks Dragons", "2012"), [result.media for result in found])
+        self.assertEqual([result.popularity for result in found],
+                         sorted((result.popularity for result in found), reverse=True))
+
+    def test_show_seasons(self):
+        show = Media("tv", 44305, "DreamWorks Dragons", "2012")
+
+        seasons = MediaLookup(ReplayTmdb("seasons_tv_44305")).seasons(show)
+
+        self.assertEqual(seasons, [
+            Season(53367, 1, "Riders of Berk", "2012-08-07"),
+            Season(53368, 2, "Defenders of Berk", "2013-09-19"),
+        ])
 
 
 class TmdbFetchAdapterTest(unittest.TestCase):

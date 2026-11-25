@@ -1,0 +1,41 @@
+[
+  {
+    "path": "search/movie",
+    "params": {
+      "query": "How to Train Your Dragon",
+      "include_adult": "false",
+      "language": "en-US",
+      "page": 1,
+      "year": 2010
+    },
+    "response": {
+      "results": [
+        {
+          "id": 10191,
+          "original_title": "How to Train Your Dragon",
+          "popularity": 17.9448,
+          "release_date": "2010-03-18"
+        },
+        {
+          "id": 207516,
+          "original_title": "How to Train Your Dragon: Legends",
+          "popularity": 1.1623,
+          "release_date": "2010-11-15"
+        },
+        {
+          "id": 1437039,
+          "original_title": "How to Train Your Dragon: The Technical Artistry of Dragon",
+          "popularity": 0.3449,
+          "release_date": "2010-10-15"
+        },
+        {
+          "id": 47626,
+          "original_title": "Legend of the BoneKnapper Dragon",
+          "popularity": 3.3934,
+          "release_date": "2010-10-14"
+        }
+      ],
+      "total_results": 4
+    }
+  }
+]
