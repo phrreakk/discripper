@@ -54,20 +54,29 @@ uv run python -m unittest discover -s tests -t .
 ## Usage
 
 ```
-usage: discripper [-h] [-t TITLE] [-y YEAR] [-f {4k,1080p,all}] [--tmdbid TMDBID] FOLDER
+usage: discripper [-h] [-t TITLE] [-y YEAR] [-f {4k,1080p,all}]
+                  [-m {movie,tv}]
+                  [--encoder {qsv_h265_10bit,nvenc_h265_10bit,x265_10bit}]
+                  [--tmdbid TMDBID]
+                  FOLDER
 
-This program is a wrapper around makemkvcon and Handbrake while also receiving media data from TMDB API
+This program is a wrapper around makemkvcon and Handbrake while also receiving
+media data from TMDB API
 
 positional arguments:
   FOLDER                Root directory for the ripped media
 
 options:
   -h, --help            show this help message and exit
-  -t TITLE, --title TITLE
-                        (Partial) Title of the media
-  -y YEAR, --year YEAR  Release year of the media
-  -f {4k,1080p,all}, --format {4k,1080p,all}
+  -t, --title TITLE     (Partial) Title of the media
+  -y, --year YEAR       Release year of the media
+  -f, --format {4k,1080p,all}
                         Format of the output file(s).
+  -m, --media {movie,tv}
+                        Media format of movie or tv.
+  --encoder {qsv_h265_10bit,nvenc_h265_10bit,x265_10bit}
+                        HandBrake video encoder for every transcode (default:
+                        qsv_h265_10bit).
   --tmdbid TMDBID       The Movie DB ID of the media
 ```
 
