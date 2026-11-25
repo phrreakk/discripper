@@ -1,0 +1,29 @@
+[
+  {
+    "path": "tv/44305",
+    "params": {
+      "language": "en-US"
+    },
+    "response": {
+      "first_air_date": "2012-08-07",
+      "id": 44305,
+      "name": "DreamWorks Dragons",
+      "original_name": "DreamWorks Dragons",
+      "popularity": 20.0099,
+      "seasons": [
+        {
+          "air_date": "2012-08-07",
+          "id": 53367,
+          "name": "Riders of Berk",
+          "season_number": 1
+        },
+        {
+          "air_date": "2013-09-19",
+          "id": 53368,
+          "name": "Defenders of Berk",
+          "season_number": 2
+        }
+      ]
+    }
+  }
+]

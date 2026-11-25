@@ -1,0 +1,14 @@
+[
+  {
+    "path": "movie/10191",
+    "params": {
+      "language": "en-US"
+    },
+    "response": {
+      "id": 10191,
+      "original_title": "How to Train Your Dragon",
+      "popularity": 17.9448,
+      "release_date": "2010-03-18"
+    }
+  }
+]

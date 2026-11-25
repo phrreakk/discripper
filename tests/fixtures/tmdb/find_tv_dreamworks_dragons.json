@@ -1,0 +1,37 @@
+[
+  {
+    "path": "search/tv",
+    "params": {
+      "query": "DreamWorks Dragons",
+      "include_adult": "false",
+      "language": "en-US",
+      "page": 1
+    },
+    "response": {
+      "results": [
+        {
+          "id": 44305,
+          "original_name": "DreamWorks Dragons",
+          "popularity": 20.0099,
+          "first_air_date": "2012-08-07",
+          "name": "DreamWorks Dragons"
+        },
+        {
+          "id": 78173,
+          "original_name": "Dragons: Race to the Edge",
+          "popularity": 34.0061,
+          "first_air_date": "2015-06-26",
+          "name": "Dragons: Race to the Edge"
+        },
+        {
+          "id": 136322,
+          "original_name": "Dragons: The Nine Realms",
+          "popularity": 19.1214,
+          "first_air_date": "2021-12-23",
+          "name": "Dragons: The Nine Realms"
+        }
+      ],
+      "total_results": 3
+    }
+  }
+]

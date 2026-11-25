@@ -47,9 +47,29 @@ uv run discripper.py -t "Pacific Rim" ~/Videos/rips
 Run the checks that CI runs:
 
 ```
-uv run pylint discripper.py media_lookup.py
+uv run pylint discripper.py media_lookup.py library_layout.py
 uv run python -m unittest discover -s tests -t .
 ```
+
+### Tests against real TMDB
+
+Most tests use fake TMDB responses. A few, in `tests/test_tmdb_live.py`, call the real TMDB API, and they're skipped unless you have a TMDB read token. Keep your token outside the repo, in either place:
+
+```
+export TMDB_API_READ_KEY=<your read token>
+# or
+mkdir -p ~/.config/discripper
+echo 'TMDB_API_READ_KEY=<your read token>' > ~/.config/discripper/tmdb.env
+chmod 600 ~/.config/discripper/tmdb.env
+```
+
+`tests/fixtures/tmdb/` holds real TMDB responses for offline tests. Each is trimmed to the fields discripper reads. To re-record them:
+
+```
+uv run python scripts/record_tmdb_fixtures.py
+```
+
+The recorder saves response bodies only, never your token. `tests/test_fixtures_hold_no_token.py` fails if a fixture ever contains anything that looks like one.
 
 ## Usage
 
