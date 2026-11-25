@@ -20,11 +20,24 @@ def ask(typed, kind="movie"):
 class AskYearTest(unittest.TestCase):
     def test_non_numeric_year_asks_again(self):
         year, out = ask(["2010s", "2010"])
+
         self.assertEqual(year, "2010")
         self.assertIn("You need a valid year", out)
 
+    def test_digit_like_symbols_ask_again(self):
+        year, out = ask(["²⁰¹⁰", "2010"])
+
+        self.assertEqual(year, "2010")
+        self.assertIn("You need a valid year", out)
+
+    def test_stray_spaces_around_a_year_are_accepted(self):
+        year, _ = ask([" 2010 "])
+
+        self.assertEqual(year, "2010")
+
     def test_blank_answer_skips_the_year(self):
         year, out = ask([""])
+
         self.assertEqual(year, "")
         self.assertNotIn("You need a valid year", out)
 
@@ -32,6 +45,7 @@ class AskYearTest(unittest.TestCase):
         with mock.patch.object(discripper, "datetime") as fake_datetime:
             fake_datetime.today.return_value.year = 2026
             year, out = ask(["1899", "2027", "1900"])
+
         self.assertEqual(year, "1900")
         self.assertEqual(out.count("You need a valid year"), 2)
 

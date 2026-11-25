@@ -101,8 +101,12 @@ def askYear(kind):
         year = input("What is the {} production year? (Optional) ".format(kind))
         if year == "":
             return year
-        if year.isdigit() and 1900 <= int(year) <= datetime.today().year:
-            return year
+        try:
+            number = int(year)
+        except ValueError:
+            number = None
+        if number is not None and 1900 <= number <= datetime.today().year:
+            return str(number)
         print("You need a valid year ")
 
 
