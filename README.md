@@ -27,12 +27,29 @@ We do not want to repear outselves so I do an os file check to see if the media 
 
 * A free TMDB user account and READ API key
     * I'm not going to spend hundreds of dollars using IMDB API.
-* python requests
-    * To make requests to TMDB API
-* python dotenv
-    * To make values not hardcoded into the code base
-* python prettytable
-    * To save time formatting the output from the TMDB API results
+* makemkvcon and HandBrakeCLI on your `PATH`
+* [uv](https://docs.astral.sh/uv/getting-started/installation/), which installs Python and the dependencies below
+    * python requests
+        * To make requests to TMDB API
+    * python dotenv
+        * To make values not hardcoded into the code base
+    * python prettytable
+        * To save time formatting the output from the TMDB API results
+
+## Setup
+
+```
+uv sync                                   # create .venv with Python and dependencies
+echo 'TMDB_API_KEY=<your read token>' > .env
+uv run discripper.py -t "Pacific Rim" ~/Videos/rips
+```
+
+Run the checks that CI runs:
+
+```
+uv run pylint discripper.py
+uv run python -m unittest discover -s tests -t .
+```
 
 ## Usage
 
