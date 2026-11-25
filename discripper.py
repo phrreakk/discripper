@@ -5,13 +5,12 @@ import os
 import subprocess
 import re
 import shutil
-import requests
-from requests.exceptions import HTTPError
 from datetime import datetime
 import argparse
 import json
 from dotenv import load_dotenv, dotenv_values
 from prettytable import PrettyTable
+from media_lookup import LookupFailed, MediaLookup, NoResults, TooManyResults, tmdb_fetch
 
 
 def loadEnvFile():
@@ -69,153 +68,71 @@ def getDiscInfo(folder, title):
     return
 
 
-def getMediaInfo(title, year):
-    mediaSeasonId = ""
-    mediaSeason = ""
-    if args.media == "movie":
-      if args.tmdbid is None:
-        searchTitle = "%20".join(title.split())
-        
-        if year == "" or year is None:
-            url = "https://api.themoviedb.org/3/search/movie?query=" + searchTitle + "&include_adult=false&language=en-US&page=1"
+def pickById(prompt, columns, rows):
+    """Show rows as a table and ask until a listed TMDB id is typed; return that row's item.
+
+    rows is a list of (tmdb_id, item, cells), shown in the order given.
+    """
+    table = PrettyTable()
+    table.field_names = columns
+    table.align = "l"
+    items = {}
+    for tmdbId, item, cells in rows:
+        table.add_row(cells)
+        items[str(tmdbId)] = item
+    print(table)
+    while True:
+        print("")
+        chosen = input(prompt)
+        if chosen == "":
+            print("You need to input an ID from the table. ")
+            print(table)
+        elif chosen not in items:
+            print("You need to select a valid ID from the table. ")
+            print(table)
         else:
-            url = "https://api.themoviedb.org/3/search/movie?query=" + searchTitle + "&include_adult=false&language=en-US&page=1&year=" + str(year)
+            return items[chosen]
 
-        # url = "https://api.themoviedb.org/3/search/test"
 
-      else:
-        url = "https://api.themoviedb.org/3/movie/" + str(args.tmdbid) + "?language=en-US"
-    
-    elif args.media == "tv":
-      if args.tmdbid is None:
-        searchTitle = "%20".join(title.split())
-        
-        if year == "" or year is None:
-            url = "https://api.themoviedb.org/3/search/tv?query=" + searchTitle + "&include_adult=false&language=en-US&page=1"
-        else:
-            url = "https://api.themoviedb.org/3/search/tv?query=" + searchTitle + "&include_adult=false&language=en-US&page=1&year=" + str(year)
+def chooseMedia(lookup, kind, name, year, tmdbId):
+    """Find the Media being ripped (by search, or by TMDB id) and, for TV, its Season.
 
-        # url = "https://api.themoviedb.org/3/search/test"
-
-      else:
-        url = "https://api.themoviedb.org/3/tv/" + str(args.tmdbid) + "?language=en-US"
-    else:
-      raise ValueError(f"Unknown media type: {args.media}")
-      
-    # Debug
-    # print(f"URL: {url}")
-    
-    headers = {
-        "accept": "application/json",
-        "Authorization": "Bearer " + str(dotenv["TMDB_API_KEY"])
-    }
-    
+    Returns (Media, Season or None). Exits with a message if the lookup fails.
+    """
     try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-    except HTTPError as http_err:
-        print(f"HTTP error occurred: {http_err}")
-        sys.exit(1)
-    except Exception as err:
-        print(f"Other error occurred: {err}")
-        sys.exit(1)
-    else:
-        responseDict = response.json()
-    
-    if args.tmdbid is None:
-        if responseDict["total_results"] > 25 and year == "":
-            print("Too many results...")
-            print("Please add a year to narrow down results")
-            sys.exit(1)
-        elif responseDict["total_results"] > 25:
-            print("Too many results...")
+        return _chooseMedia(lookup, kind, name, year, tmdbId)
+    except LookupFailed as err:
+        print(f"TMDB request failed: {err}")
+    except NoResults:
+        print("Zero results...")
+        print("Try to add more text to the title search")
+    except TooManyResults as err:
+        print("Too many results...")
+        if err.year_given:
             print("Try to add more text to the title search")
-            sys.exit(1)
-        elif responseDict["total_results"] == 0:
-            print("Zero results...")
-            print("Try to add more text to the title search")
-            sys.exit(1)
         else:
-            table = PrettyTable()
-            table.field_names = ["ID", "Title", "Year", "Popularity"]
-            
-            allMediaIds = []
-            for row in responseDict["results"]:
-                if args.media == "movie":
-                  table.add_row([row["id"], row["original_title"], row.get("release_date", ""), row["popularity"]])
-                elif args.media == "tv":
-                  table.add_row([row["id"], row["original_name"], row.get("first_air_date", ""), row["popularity"]])
-                allMediaIds.append(str(row["id"]))
-            table.align = "l"
-            print(table.get_string(sortby="Popularity", reversesort=True))
-            
-        while True:
-            # print(f"Ids: {allMediaIds}")
-            print("")
-            mediaId = input("Which {} is being ripped? ".format(args.media))
-            if mediaId == "":
-                print("You need to input an ID from the table. ")
-                print(table)
-            elif mediaId not in allMediaIds:
-                print("You need to select a valid ID from the table. ")
-                print(table)
-            else:
-                if args.media == "movie":
-                    mediaTitle = next((sub['original_title'] for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)
-                    mediaYear = next((sub.get('release_date', '') for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)
-                    return mediaId, mediaTitle, mediaYear, mediaSeason
-                elif args.media == "tv":
-                    mediaTitle = next((sub['original_name'] for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)
-                    mediaYear = next((sub.get('first_air_date', '') for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)
-                    # return mediaId, mediaTitle, mediaYear
-                    print("Search season information...")
-                    if args.media == "tv":
-                        url = "https://api.themoviedb.org/3/tv/" + mediaId + "?language=en-US"
-                        headers = {
-                            "accept": "application/json",
-                            "Authorization": "Bearer " + str(dotenv["TMDB_API_KEY"])
-                        }
-                        
-                        try:
-                            response = requests.get(url, headers=headers)
-                            response.raise_for_status()
-                        except HTTPError as http_err:
-                            print(f"HTTP error occurred: {http_err}")
-                            sys.exit(1)
-                        except Exception as err:
-                            print(f"Other error occurred: {err}")
-                            sys.exit(1)
-                        else:
-                            responseDict = response.json()
-                            # print(responseDict["seasons"])
-                            # sys.exit(0)
-                        table = PrettyTable()
-                        table.field_names = ["ID", "Season", "Season #", "Air Date"]
-                        allMediaIds = []
-                        for row in responseDict["seasons"]:
-                            table.add_row([row["id"], row["name"], row["season_number"], row.get("air_date", "")])
-                            allMediaIds.append(str(row["id"]))
-                        table.align = "l"
-                        print(table.get_string(sortby="Season #", reversesort=False))
-                        while True:
-                            # print(f"Ids: {allMediaIds}")
-                            print("")
-                            mediaSeasonId = input("Which {} season is being ripped? ".format(args.media))
-                            if mediaSeasonId == "":
-                                print("You need to input an ID from the table. ")
-                                print(table)
-                            elif mediaSeasonId not in allMediaIds:
-                                print("You need to select a valid ID from the table. ")
-                                print(table)
-                            else:
-                                mediaSeason = next((sub['season_number'] for sub in responseDict["seasons"] if sub['id'] == int(mediaSeasonId)), None)
-                                return mediaId, mediaTitle, mediaYear, mediaSeason
-    
+            print("Please add a year to narrow down results")
+    sys.exit(1)
+
+
+def _chooseMedia(lookup, kind, name, year, tmdbId):
+    if tmdbId is not None:
+        media = lookup.get(kind, tmdbId)
     else:
-        mediaId = args.tmdbid
-        mediaTitle = responseDict["original_title"]
-        mediaYear = responseDict["release_date"]
-        return mediaId, mediaTitle, mediaYear, mediaSeason
+        media = pickById(
+            "Which {} is being ripped? ".format(kind),
+            ["ID", "Name", "Year", "Popularity"],
+            [(r.media.tmdb_id, r.media, [r.media.tmdb_id, r.media.name, r.media.year, r.popularity])
+             for r in lookup.find(kind, name, year)])
+    if kind != "tv":
+        return media, None
+    print("Search season information...")
+    season = pickById(
+        "Which {} season is being ripped? ".format(kind),
+        ["ID", "Season", "Season #", "Air Date"],
+        [(s.tmdb_id, s, [s.tmdb_id, s.name, s.number, s.air_date]) for s in lookup.seasons(media)])
+    return media, season
+
 
 def ripFullMkv(folder, title):
     print("Ripping...Please wait...")
@@ -419,8 +336,7 @@ def main():
     # Debug    
     # print("RIP " + discTitle)
     mediaTitle = ""
-    mediaYear = 0
-    mediaSeason = 0
+    mediaYear = ""
     if args.tmdbid is None:
         if args.title is None:
             while True:
@@ -445,20 +361,22 @@ def main():
             mediaYear = args.year
         
     # Get movie/show info
-    mediaId, mediaTitle, mediaYear, mediaSeason = getMediaInfo(mediaTitle, mediaYear)
+    lookup = MediaLookup(tmdb_fetch(dotenv["TMDB_API_KEY"]))
+    media, season = chooseMedia(lookup, args.media, mediaTitle, mediaYear, args.tmdbid)
+    seasonNumber = season.number if season else 0
 
     mediaFolder = args.FOLDER
     if not os.path.isdir(mediaFolder):
         os.makedirs(mediaFolder)
     # Debug
     # print(f"Folder: {mediaFolder}")
-    # print(f"ID: {mediaId}")
-    # print(f"Title: {mediaTitle}")
-    # print(f"Year: {mediaYear}")
-    # print(f"Season: {mediaSeason}")
+    # print(f"ID: {media.tmdb_id}")
+    # print(f"Title: {media.name}")
+    # print(f"Year: {media.year}")
+    # print(f"Season: {seasonNumber}")
     # sys.exit(0)
     
-    getDiscInfo(mediaFolder, mediaTitle)
+    getDiscInfo(mediaFolder, media.name)
     
     if args.media == "movie":
       print("Titles: " + str(titles))
@@ -481,24 +399,24 @@ def main():
         # sys.exit(0)
     
     if args.media == "movie":
-        ripFolder = mediaFolder + "/" + "_".join(mediaTitle.split())     
-        print(f"We are going to rip {mediaTitle} ({mediaYear[:4]}) with TMDBID [tmdbid-{mediaId}] to {ripFolder}")
+        ripFolder = mediaFolder + "/" + "_".join(media.name.split())     
+        print(f"We are going to rip {media.name} ({media.year}) with TMDBID [tmdbid-{media.tmdb_id}] to {ripFolder}")
         ripFile = ripFullMkv(ripFolder, discTitle)
         fullRipFile = ripFolder + "/" + ripFile
         print(f"Rip completed: {fullRipFile}")
-        encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, mediaTitle, mediaYear[:4], mediaId, ripFolder, mediaSeason)
+        encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, media.name, media.year, media.tmdb_id, ripFolder, seasonNumber)
         if args.format in ['4k', 'all']:
             print(f"Encode completed: {encodeFullPath4k}")
         if args.format in ['1080p', 'all']:
             print(f"Encode completed: {encodeFullPath1080p}")
     elif args.media == "tv":
-        ripFolder = mediaFolder + "/" + "_".join(mediaTitle.split())
-        print(f"We are going to rip {mediaTitle} - Season {mediaSeason} ({mediaYear[:4]}) with TMDBID [tmdbid-{mediaId}] to {ripFolder}")
+        ripFolder = mediaFolder + "/" + "_".join(media.name.split())
+        print(f"We are going to rip {media.name} - Season {seasonNumber} ({media.year}) with TMDBID [tmdbid-{media.tmdb_id}] to {ripFolder}")
         for title in range(int(startDiscTitle), int(endDiscTitle) + 1):
             ripFile = ripFullMkv(ripFolder, str(title))
             fullRipFile = ripFolder + "/" + ripFile
             print(f"Rip completed: {fullRipFile}")
-            encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, mediaTitle, mediaYear[:4], mediaId, ripFolder, mediaSeason)
+            encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, media.name, media.year, media.tmdb_id, ripFolder, seasonNumber)
             if args.format in ['4k', 'all']:
                 print(f"Encode completed: {encodeFullPath4k}")
             if args.format in ['1080p', 'all']:
