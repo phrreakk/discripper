@@ -170,7 +170,7 @@ class RecordedTmdbTest(unittest.TestCase):
         self.assertEqual(found[0].media, Media("movie", 10191, "How to Train Your Dragon", "2010"))
         self.assertTrue(all(result.media.year == "2010" for result in found))
 
-    def test_movie_by_tmdb_id(self):
+    def test_movie_by_tmdb_id_reads_the_real_record(self):
         media = MediaLookup(ReplayTmdb("get_movie_10191")).get("movie", 10191)
 
         self.assertEqual(media, Media("movie", 10191, "How to Train Your Dragon", "2010"))
@@ -182,7 +182,7 @@ class RecordedTmdbTest(unittest.TestCase):
         self.assertEqual([result.popularity for result in found],
                          sorted((result.popularity for result in found), reverse=True))
 
-    def test_show_seasons(self):
+    def test_show_seasons_come_back_numbered_with_names_and_air_dates(self):
         show = Media("tv", 44305, "DreamWorks Dragons", "2012")
 
         seasons = MediaLookup(ReplayTmdb("seasons_tv_44305")).seasons(show)

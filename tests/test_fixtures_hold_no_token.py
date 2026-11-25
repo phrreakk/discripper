@@ -15,12 +15,13 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 TOKEN_LIKE = re.compile(r"eyJ[A-Za-z0-9_-]{10,}\.|Bearer|Authorization", re.IGNORECASE)
 
 
-def leaks(text, key):
-    """What in a fixture's text looks like a token, if anything."""
+def token_found_in(text, key):
+    """Describe the token found in a fixture's text, without repeating it; None if there's none."""
     if key and key in text:
         return "the TMDB read token"
-    match = TOKEN_LIKE.search(text)
-    return match.group(0)[:12] + "..." if match else None
+    if TOKEN_LIKE.search(text):
+        return "something token-like (a JWT, Bearer or Authorization)"
+    return None
 
 
 class FixturesHoldNoTokenTest(unittest.TestCase):
@@ -31,12 +32,16 @@ class FixturesHoldNoTokenTest(unittest.TestCase):
         self.assertTrue(files, "no fixtures found")
         for path in files:
             with self.subTest(fixture=str(path.relative_to(FIXTURES))):
-                self.assertIsNone(leaks(path.read_text(), key))
+                self.assertIsNone(token_found_in(path.read_text(), key))
 
-    def test_a_token_in_a_fixture_is_caught(self):
-        self.assertEqual(leaks('{"name": "abc-secret-xyz"}', "abc-secret-xyz"), "the TMDB read token")
-        self.assertIsNotNone(leaks('{"auth": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig"}', None))
-        self.assertIsNone(leaks('{"name": "DreamWorks Dragons"}', None))
+    def test_the_read_token_itself_is_caught(self):
+        self.assertEqual(token_found_in('{"name": "abc-secret-xyz"}', "abc-secret-xyz"), "the TMDB read token")
+
+    def test_a_jwt_shaped_string_is_caught_without_a_token_to_compare(self):
+        self.assertIsNotNone(token_found_in('{"auth": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig"}', None))
+
+    def test_ordinary_metadata_passes(self):
+        self.assertIsNone(token_found_in('{"name": "DreamWorks Dragons"}', None))
 
 
 if __name__ == "__main__":

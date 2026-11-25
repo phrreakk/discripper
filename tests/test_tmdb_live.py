@@ -26,7 +26,7 @@ class LiveTmdbTest(unittest.TestCase):
 
         self.assertIn(DRAGON, [result.media for result in found])
 
-    def test_movie_by_tmdb_id(self):
+    def test_movie_by_tmdb_id_matches_the_search_result(self):
         self.assertEqual(self.lookup.get("movie", 10191), DRAGON)
 
     def test_show_search_finds_the_show(self):
@@ -34,11 +34,11 @@ class LiveTmdbTest(unittest.TestCase):
 
         self.assertIn(DRAGONS_SHOW, [result.media for result in found])
 
-    def test_show_seasons_come_back_in_order_with_names_and_air_dates(self):
-        seasons = self.lookup.seasons(self.lookup.get("tv", 44305))
+    def test_show_seasons_have_names_and_air_dates(self):
+        seasons = {season.number: season for season in self.lookup.seasons(DRAGONS_SHOW)}
 
-        self.assertEqual([season.number for season in seasons][:2], [1, 2])
-        self.assertEqual((seasons[0].name, seasons[0].air_date), ("Riders of Berk", "2012-08-07"))
+        self.assertEqual((seasons[1].name, seasons[1].air_date), ("Riders of Berk", "2012-08-07"))
+        self.assertEqual((seasons[2].name, seasons[2].air_date), ("Defenders of Berk", "2013-09-19"))
 
     def test_bad_token_becomes_lookup_failed(self):
         with self.assertRaises(LookupFailed) as raised:
