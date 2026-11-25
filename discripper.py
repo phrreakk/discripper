@@ -137,9 +137,9 @@ def getMediaInfo(title, year):
             allMediaIds = []
             for row in responseDict["results"]:
                 if args.media == "movie":
-                  table.add_row([row["id"], row["original_title"], row["release_date"], row["popularity"]])
+                  table.add_row([row["id"], row["original_title"], row.get("release_date", ""), row["popularity"]])
                 elif args.media == "tv":
-                  table.add_row([row["id"], row["original_name"], row["first_air_date"], row["popularity"]])
+                  table.add_row([row["id"], row["original_name"], row.get("first_air_date", ""), row["popularity"]])
                 allMediaIds.append(str(row["id"]))
             table.align = "l"
             print(table.get_string(sortby="Popularity", reversesort=True))
@@ -157,11 +157,11 @@ def getMediaInfo(title, year):
             else:
                 if args.media == "movie":
                     mediaTitle = next((sub['original_title'] for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)
-                    mediaYear = next((sub['release_date'] for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)
+                    mediaYear = next((sub.get('release_date', '') for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)
                     return mediaId, mediaTitle, mediaYear
                 elif args.media == "tv":
                     mediaTitle = next((sub['original_name'] for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)
-                    mediaYear = next((sub['first_air_date'] for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)
+                    mediaYear = next((sub.get('first_air_date', '') for sub in responseDict["results"] if sub['id'] == int(mediaId)), None)
                     # return mediaId, mediaTitle, mediaYear
                     print("Search season information...")
                     if args.media == "tv":
@@ -186,7 +186,7 @@ def getMediaInfo(title, year):
                         table.field_names = ["ID", "Season", "Season #", "Air Date"]
                         allMediaIds = []
                         for row in responseDict["seasons"]:
-                            table.add_row([row["id"], row["name"], row["season_number"], row["air_date"]])
+                            table.add_row([row["id"], row["name"], row["season_number"], row.get("air_date", "")])
                             allMediaIds.append(str(row["id"]))
                         table.align = "l"
                         print(table.get_string(sortby="Season #", reversesort=False))
@@ -489,4 +489,5 @@ def main():
             if args.format in ['1080p', 'all']:
                 print(f"Encode completed: {encodeFullPath1080p}")
 
-main()
+if __name__ == "__main__":
+    main()
