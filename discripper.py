@@ -1,76 +1,57 @@
 #!/usr/bin/env python
 
 import sys
-import os
-import subprocess
-import re
 import shutil
 from datetime import datetime
+from pathlib import Path
 import argparse
-import json
-from dotenv import load_dotenv, dotenv_values
+from dotenv import dotenv_values
 from prettytable import PrettyTable
 import library_layout
+from disc import Disc, RipFailed
+from encoder import ENCODERS, EncodeFailed, Encoder
 from media_lookup import LookupFailed, MediaLookup, NoResults, TooManyResults, tmdb_fetch
+from tool_run import tool
 
 
-# HandBrake encoders --encoder accepts: Intel QSV (the default), NVIDIA NVENC, and software x265.
-ENCODERS = ["qsv_h265_10bit", "nvenc_h265_10bit", "x265_10bit"]
+# The Formats each --format choice encodes, in order.
+FORMATS = {"4k": ["4k"], "1080p": ["1080p"], "all": ["4k", "1080p"]}
 
 
 def loadEnvFile():
     global dotenv
     dotenv = dotenv_values(".env")
-    
-    # Debug
-    # print(f"Config: {dotenv["TMDB_API_KEY"]}")
-    # sys.exit(0)
+
 
 def getRequirements():
-    ripApp = "makemkvcon"
-    global pathRipApp
-    pathRipApp = shutil.which(ripApp)
-    
-    if pathRipApp is None:
-        print("The path to " + ripApp + " was not found.")
-        sys.exit(1)
-        
-    transcodeApp = "HandBrakeCLI"
-    global pathTranscodeApp
-    pathTranscodeApp = shutil.which(transcodeApp)
-    
-    if pathTranscodeApp is None:
-        print("The path to " + transcodeApp + " was not found.")
-        sys.exit(1)
-    
-    return
-        
-    
-def getDiscInfo(folder, title):
-    global titles
-    titles = 0
-    fullPath = folder + "/" + "_".join(title.split())
-    
-    if not os.path.exists(fullPath):
-        os.makedirs(fullPath)
-    
-    with open(fullPath + "/" + "/makemkvinfo.log", "w") as file:
-        process = subprocess.Popen([pathRipApp, 'info', 'disc:0'], stdout=file, stderr=file)
-        process.wait()
-    
-    with open(fullPath + "/" + "/makemkvinfo.log", "r") as file:   
-        for line in file:
-            line.strip()
-            if re.search(r"skipped", line):
-              continue
-            # This var is there so it limits the input validation below
-            if re.match(r"Title ", line):
-              titles += 1
-              if args.media == "tv":
-                print(line)
-            if args.media == "movie":
-              print(line)
-    return
+    """Return the paths to makemkvcon and HandBrakeCLI; exit if either isn't on PATH."""
+    paths = []
+    for app in ["makemkvcon", "HandBrakeCLI"]:
+        path = shutil.which(app)
+        if path is None:
+            print("The path to " + app + " was not found.")
+            sys.exit(1)
+        paths.append(path)
+    return paths
+
+
+def showDiscTitles(titles):
+    table = PrettyTable()
+    table.field_names = ["Title", "Duration", "Chapters", "Size", "File"]
+    table.align = "l"
+    for title in titles:
+        table.add_row([title.number, title.duration, title.chapters, title.size, title.file_name])
+    print(table)
+
+
+def askDiscTitle(prompt, titles):
+    """Ask until the number of one of titles is typed; return that Disc title."""
+    byNumber = {str(title.number): title for title in titles}
+    while True:
+        chosen = input(prompt).strip()
+        if chosen in byNumber:
+            return byNumber[chosen]
+        print("You need to input a title number from the table: " + ", ".join(byNumber))
 
 
 def pickById(prompt, columns, rows):
@@ -154,142 +135,43 @@ def _chooseMedia(lookup, kind, name, year, tmdbId):
     return media, season
 
 
-def ripFullMkv(folder, title):
-    print("Ripping...Please wait...")
-    
-    # Info returns different results with -r and without
-    ripFileName = None
-    process = subprocess.Popen([pathRipApp, '-r', 'info', 'disc:0'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    for line in process.stdout: 
-        search = re.search(rf'^TINFO:{title},27,0,\"(.+)\"', line)
-        if search:
-            ripFileName = search.group(1)
-            # print(f"Match found: {ripFileName}")
+def episodeNumber(seasonFolder, rip):
+    """The episode number of rip in a Season, counting rips in the order they were first encoded.
 
-    if ripFileName is None:
-        print(f"makemkvcon did not report a file name for title {title}.")
-        print("Check the title number against the list shown earlier, and that the disc is still in the drive.")
-        sys.exit(1)
-
-    if not os.path.isfile(folder + "/" + ripFileName):
-        with open(folder + "/" + "/makemkvrip.log", "w") as file:
-            process = subprocess.Popen([pathRipApp, 'mkv', '--cache=2048', '--noscan', '--minlength=300', '-r', 'disc:0', title, folder], stdout=file, stderr=file)
-            process.wait()
-
-    # Might have a directory in the end of the file, we'll see
-    
-    with open(folder + "/" + "/makemkvrip.log", "r") as file:   
-        for line in file:
-            line.strip()
-            if re.search(r"Copy complete.", line):
-                return ripFileName
-        else:
-            print("Disc did not complete.")
-            print(f"Please review {folder}/makemkvrip.log for additional details.")
-            sys.exit(1)
-    
-
-def encodeFullMkv(fullRipPath, media, parentFolder, season, encoder):
-    """Encode one rip into the Library layout under parentFolder.
-
-    season is the Season number for TV and None for a movie. encoder is the
-    HandBrake video encoder (one of ENCODERS) used for every encode.
+    Each Season folder keeps episode.list, one Rip path per line. A Rip is matched
+    by file name and added at the end the first time it's seen.
     """
-    preset4k = "H.265 MKV 2160p60 4K"
-    preset1080p = "H.265 MKV 1080p30"
-    encodeFullFile4k = ""
-    encodeFullFile1080p = ""
-    found = 0
-    episodeNum = None
-    transcodePath = os.path.join(parentFolder, library_layout.folder_for(media, season))
-    if not os.path.isdir(transcodePath):
-        os.makedirs(transcodePath)
+    listing = Path(seasonFolder) / "episode.list"
+    lines = listing.read_text(encoding="utf-8").splitlines() if listing.exists() else []
+    names = [Path(line).name for line in lines if line.strip()]
+    if rip.name not in names:
+        with open(listing, "a", encoding="utf-8") as file:
+            file.write(str(rip) + "\n")
+        names.append(rip.name)
+    return names.index(rip.name) + 1
+
+
+def encodeFullMkv(encoder, rip, media, parentFolder, season, formats):
+    """Encode one Rip at each of formats into the Library layout under parentFolder.
+
+    season is the Season number for TV and None for a movie. Returns the encoded
+    paths, one per Format, in the order of formats.
+    """
+    parentFolder = Path(parentFolder)
+    seasonFolder = parentFolder / library_layout.folder_for(media, season)
+    seasonFolder.mkdir(parents=True, exist_ok=True)
+    episode = None
     if media.kind == "tv":
-        episodeNum = 0
-        if os.path.exists(transcodePath + "/" + "episode.list"):
-            with open(transcodePath + "/" + "episode.list", 'r') as file:
-                for line in file:
-                    episodeNum += 1
-                    if found < 1:
-                        if fullRipPath[-20:] in line:
-                            print("Episode already exists in the file.")
-                            found = 1
-            if found == 0:
-                # Write the string to the file
-                with open(transcodePath + "/" + "episode.list", 'a') as file:
-                    file.write(fullRipPath + '\n')
-        else:
-            # Write the string to the file
-            with open(transcodePath + "/" + "episode.list", 'w') as file:
-                file.write(fullRipPath + '\n')
+        episode = episodeNumber(seasonFolder, rip)
+        print(f"Episode {episode}")
+    encoded = []
+    for format in formats:
+        print(f"Encoding {format} file...Please wait...")
+        output = parentFolder / library_layout.path_for(media, format, season, episode)
+        encoded.append(encoder.encode(rip, output, format))
+    return encoded
 
-        if found == 0:
-            # How many episodes are there so far
-            with open(transcodePath + "/" + "episode.list", 'r') as f:
-                episodeNum = sum(1 for line in f)
-            print('Total number of episodes:', episodeNum)
 
-    outputTranscodePath4k = os.path.join(parentFolder, library_layout.path_for(media, "4k", season, episodeNum))
-    outputTranscodePath1080p = os.path.join(parentFolder, library_layout.path_for(media, "1080p", season, episodeNum))
-
-    
-    if args.format in ['4k', 'all']:
-        print("Encoding 4k file...Please wait...")
-        if found == 1:
-            print("Encoded file found: " + outputTranscodePath4k)
-            encodeFullFile4k = outputTranscodePath4k
-            return encodeFullFile4k, encodeFullFile1080p
-        # Debug
-        # print(f"Path: {outputTranscodePath4k}")
-        # sys.exit(0)
-        if not os.path.isfile(outputTranscodePath4k):
-            with open(transcodePath + "/" + "/handbrakemkv4k.log", "w") as file:
-                print(f"Start: {datetime.now()}", file=file)
-                process = subprocess.Popen([pathTranscodeApp, "-Z",  preset4k, "-e", encoder, "-i", fullRipPath, "-o", outputTranscodePath4k], stdout=file, stderr=file)
-                process.wait()
-                print(f"End: {datetime.now()}", file=file)
-                
-        with open(transcodePath + "/" + "/handbrakemkv4k.log", "r") as file:
-            for line in file:
-                line.strip()
-                search = re.search(r'\"File\":\s\"(.+)\"', line)
-                if search:
-                    encodeFullFile4k = search.group(1)
-                if re.search(r'Encode done!', line):
-                    break 
-            else:
-                print("Encode did not complete.")
-                print(f"Please review {transcodePath}/handbrakemkv4k.log for additional details.")
-                sys.exit(1)
-    
-    if args.format in ['1080p', 'all']:
-        print("Encoding 1080p file...Please wait...")
-        if found == 1:
-            print("Encoded file found: " + outputTranscodePath1080p)
-            encodeFullFile1080p = outputTranscodePath1080p
-            return encodeFullFile4k, encodeFullFile1080p
-        if not os.path.isfile(outputTranscodePath1080p):
-            with open(transcodePath + "/" + "/handbrakemkv1080p.log", "w") as file:
-                print(f"Start: {datetime.now()}", file=file)
-                process = subprocess.Popen([pathTranscodeApp, "-Z",  preset1080p, "-e", encoder, "-i", fullRipPath, "-o", outputTranscodePath1080p], stdout=file, stderr=file)
-                process.wait()
-                print(f"End: {datetime.now()}", file=file)
-        
-        with open(transcodePath + "/" + "/handbrakemkv1080p.log", "r") as file:
-            for line in file:
-                line.strip()
-                search = re.search(r'\"File\":\s\"(.+)\"', line)
-                if search:
-                    encodeFullFile1080p = search.group(1)
-                if re.search(r'Encode done!', line):
-                    break 
-            else:
-                print("Encode did not complete.")
-                print(f"Please review {transcodePath}/handbrakemkv1080p.log for additional details.")
-                sys.exit(1)
-    
-    return encodeFullFile4k, encodeFullFile1080p
-    
 def parseArgs(argv):
     """Parse discripper's command line arguments."""
     parser = argparse.ArgumentParser(
@@ -307,26 +189,41 @@ def parseArgs(argv):
     parser.add_argument("FOLDER", help="Root directory for the ripped media")
     return parser.parse_args(argv)
 
+def chooseDiscTitles(kind, titles):
+    """Ask which Disc titles to rip: one for a movie, a first-to-last range for TV."""
+    showDiscTitles(titles)
+    if kind == "movie":
+        print("The title with the most chapters is probably the one you want to rip. ")
+        return [askDiscTitle("Which single title would you like to rip? ", titles)]
+    start = askDiscTitle("Which title should START the rip? ", titles)
+    end = askDiscTitle("Which title should END the rip? ",
+                       [title for title in titles if title.number >= start.number])
+    return [title for title in titles if start.number <= title.number <= end.number]
+
+
+def ripAndEncode(disc, encoder, titles, media, ripFolder, season, formats):
+    """Rip each Disc title, then encode each Rip at each Format. Exits if a step fails."""
+    for title in titles:
+        try:
+            rip = disc.rip(title, ripFolder)
+            print(f"Rip completed: {rip}")
+            for encoded in encodeFullMkv(encoder, rip, media, ripFolder, season, formats):
+                print(f"Encode completed: {encoded}")
+        except RipFailed as err:
+            print("Disc did not complete.")
+            print(f"Please review {err.log} for additional details.")
+            sys.exit(1)
+        except EncodeFailed as err:
+            print("Encode did not complete.")
+            print(f"Please review {err.log} for additional details.")
+            sys.exit(1)
+
 
 def main():
     loadEnvFile()
-    
-    global args
     args = parseArgs(sys.argv[1:])
-    
-    # Debug
-    # print(f"Title: {args.title}")
-    # print(f"Year: {args.year}")
-    # print(f"Media: {args.media}")
-    # print(f"TMDB ID: {args.tmdbid}")
-    # print(f"Folder: {args.FOLDER}")
-    # sys.exit(0)
-    
-    # See if requirements are satisfied
-    getRequirements()
-    
-    # Debug    
-    # print("RIP " + discTitle)
+    makemkvcon, handBrake = getRequirements()
+
     mediaTitle = ""
     mediaYear = ""
     if args.tmdbid is None:
@@ -339,71 +236,37 @@ def main():
                     break
         else:
             mediaTitle = args.title
-        
+
         if args.year is None:
             mediaYear = askYear(args.media)
         else:
             mediaYear = args.year
-        
+
     # Get movie/show info
     lookup = MediaLookup(tmdb_fetch(dotenv["TMDB_API_KEY"]))
     media, season = chooseMedia(lookup, args.media, mediaTitle, mediaYear, args.tmdbid)
 
-    mediaFolder = args.FOLDER
-    if not os.path.isdir(mediaFolder):
-        os.makedirs(mediaFolder)
-    # Debug
-    # print(f"Folder: {mediaFolder}")
-    # print(f"ID: {media.tmdb_id}")
-    # print(f"Title: {media.name}")
-    # print(f"Year: {media.year}")
-    # sys.exit(0)
-    
-    getDiscInfo(mediaFolder, media.name)
-    
-    if args.media == "movie":
-      print("Titles: " + str(titles))
-      print("The title with the most sections is probably the one you want to rip. ")
-      while True:
-          discTitle = input("Which single title would you like to rip? ")
-          if int(discTitle) >= 0 and int(discTitle) < titles:
-              break
-    elif args.media == "tv":
-        print("Titles: " + str(titles))
-        while True:
-            startDiscTitle = input("Which title should START the rip? ")
-            if int(startDiscTitle) >= 0 and int(startDiscTitle) < titles:
-                next
-            endDiscTitle = input("Which title should END the rip? ")
-            if int(endDiscTitle) >= int(startDiscTitle) and int(endDiscTitle) < titles:
-                break
-        # print(int(startDiscTitle))
-        # print(int(endDiscTitle))
-        # sys.exit(0)
-    
-    if args.media == "movie":
-        ripFolder = mediaFolder + "/" + "_".join(media.name.split())     
-        print(f"We are going to rip {media.name} ({media.year}) with TMDBID [tmdbid-{media.tmdb_id}] to {ripFolder}")
-        ripFile = ripFullMkv(ripFolder, discTitle)
-        fullRipFile = ripFolder + "/" + ripFile
-        print(f"Rip completed: {fullRipFile}")
-        encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, media, ripFolder, season.number if season else None, args.encoder)
-        if args.format in ['4k', 'all']:
-            print(f"Encode completed: {encodeFullPath4k}")
-        if args.format in ['1080p', 'all']:
-            print(f"Encode completed: {encodeFullPath1080p}")
-    elif args.media == "tv":
-        ripFolder = mediaFolder + "/" + "_".join(media.name.split())
+    ripFolder = Path(args.FOLDER) / "_".join(media.name.split())
+    ripFolder.mkdir(parents=True, exist_ok=True)
+
+    disc = Disc(tool(makemkvcon))
+    infoLog = ripFolder / "makemkvinfo.log"
+    titles = disc.titles(infoLog)
+    if not titles:
+        print("makemkvcon found no titles to rip. Check that a disc is in the drive.")
+        print(f"Please review {infoLog} for additional details.")
+        sys.exit(1)
+    print("Titles: " + str(len(titles)))
+    chosen = chooseDiscTitles(args.media, titles)
+
+    if season:
         print(f"We are going to rip {media.name} - Season {season.number} ({media.year}) with TMDBID [tmdbid-{media.tmdb_id}] to {ripFolder}")
-        for title in range(int(startDiscTitle), int(endDiscTitle) + 1):
-            ripFile = ripFullMkv(ripFolder, str(title))
-            fullRipFile = ripFolder + "/" + ripFile
-            print(f"Rip completed: {fullRipFile}")
-            encodeFullPath4k, encodeFullPath1080p = encodeFullMkv(fullRipFile, media, ripFolder, season.number if season else None, args.encoder)
-            if args.format in ['4k', 'all']:
-                print(f"Encode completed: {encodeFullPath4k}")
-            if args.format in ['1080p', 'all']:
-                print(f"Encode completed: {encodeFullPath1080p}")
+    else:
+        print(f"We are going to rip {media.name} ({media.year}) with TMDBID [tmdbid-{media.tmdb_id}] to {ripFolder}")
+    print("Ripping...Please wait...")
+    ripAndEncode(disc, Encoder(tool(handBrake), args.encoder), chosen, media, ripFolder,
+                 season.number if season else None, FORMATS[args.format])
+
 
 if __name__ == "__main__":
     main()
