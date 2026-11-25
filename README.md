@@ -47,7 +47,7 @@ uv run discripper.py -t "Pacific Rim" ~/Videos/rips
 Run the checks that CI runs:
 
 ```
-uv run pylint discripper.py
+uv run pylint discripper.py media_lookup.py
 uv run python -m unittest discover -s tests -t .
 ```
 
