@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from disc import MIN_LENGTH, Disc, DiscTitle, RipFailed  # noqa: E402
+from disc import MIN_LENGTH, Disc, DiscTitle, RipFailed, segments_differing  # noqa: E402
+from tests.planes_titles import T02, T03, T04  # noqa: E402
 from tests.fakes import FakeTool, makemkv_that_copies  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures" / "makemkv"
@@ -137,6 +138,23 @@ class RipTest(unittest.TestCase):
 
         self.assertTrue((self.folder / "makemkvrip_t00.log").is_file())
         self.assertTrue((self.folder / "makemkvrip_t01.log").is_file())
+
+
+class SegmentsDifferingTest(unittest.TestCase):
+    def test_two_language_copies_differ_only_in_their_title_card_and_credits(self):
+        self.assertEqual(segments_differing(T02, T03), 2)
+
+    def test_a_copy_with_its_own_on_screen_text_differs_all_through(self):
+        self.assertEqual(segments_differing(T03, T04), 42)
+
+    def test_the_count_is_the_same_either_way_round(self):
+        self.assertEqual(segments_differing(T04, T02), segments_differing(T02, T04))
+
+    def test_makemkv_ranges_count_as_every_segment_in_them(self):
+        a = DiscTitle(0, "a.mkv", "1:00:00", 1, "1 GB", segments="1-4,9")
+        b = DiscTitle(1, "b.mkv", "1:00:00", 1, "1 GB", segments="1,2,3,4,10")
+
+        self.assertEqual(segments_differing(a, b), 1)
 
 
 if __name__ == "__main__":

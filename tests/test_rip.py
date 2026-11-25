@@ -14,6 +14,7 @@ from encoder import Encoder  # noqa: E402
 from media_lookup import Media, MediaLookup  # noqa: E402
 from tests.test_choose_media import DRAGON, DRAGONS_SHOW, SEASONS  # noqa: E402
 from tests.test_media_lookup import FakeTmdb  # noqa: E402
+from tests.planes_titles import EXTRA, T02, T03, T04  # noqa: E402
 from tests.fakes import FakeTool, handbrake_that_finishes, makemkv_that_copies  # noqa: E402
 
 MOVIE = Media(kind="movie", tmdb_id=10191, name="How to Train Your Dragon", year="2010")
@@ -166,19 +167,33 @@ class PlanRipTest(unittest.TestCase):
 
 
 class ShowDiscTitlesTest(unittest.TestCase):
-    def test_the_table_shows_each_titles_playlist_and_segment_map(self):
-        english = DiscTitle(number=0, file_name="title_t00.mkv", duration="1:31:40", chapters=16,
-                            size="25.1 GB", playlist="00800.mpls", segments="1-4,9")
+    def rows(self, titles):
         out = io.StringIO()
-
         with redirect_stdout(out):
-            discripper.showDiscTitles([english])
+            discripper.showDiscTitles(titles)
+        lines = [line for line in out.getvalue().splitlines() if line.startswith("|")]
+        header = [cell.strip() for cell in lines[0].strip("|").split("|")]
+        return [dict(zip(header, (cell.strip() for cell in line.strip("|").split("|"))))
+                for line in lines[1:]]
 
-        header, row = [line for line in out.getvalue().splitlines() if line.startswith("|")]
-        self.assertIn("Playlist", header)
-        self.assertIn("Segments", header)
-        self.assertIn("00800.mpls", row)
-        self.assertIn("1-4,9", row)
+    def test_copies_of_the_same_length_show_how_much_they_differ(self):
+        rows = self.rows([T02, T03, T04, EXTRA])
+
+        self.assertEqual([row["Playlist"] for row in rows],
+                         ["00801.mpls", "00800.mpls", "00802.mpls", "00036.m2ts"])
+        self.assertEqual([row["Segments differ from"] for row in rows], [
+            "title 3 in 2, title 4 in 42",
+            "title 2 in 2, title 4 in 42",
+            "title 2 in 42, title 3 in 42",
+            "",
+        ])
+
+    def test_the_table_stays_narrow(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            discripper.showDiscTitles([T02, T03, T04, EXTRA])
+
+        self.assertLess(max(len(line) for line in out.getvalue().splitlines()), 120)
 
 
 class ChooseDiscTitlesTest(unittest.TestCase):

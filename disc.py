@@ -93,6 +93,24 @@ class Disc:
         return rip
 
 
+def segments_differing(a: DiscTitle, b: DiscTitle) -> int:
+    """How many segments one title plays that the other doesn't (the larger of the two counts)."""
+    first, second = _segment_set(a.segments), _segment_set(b.segments)
+    return max(len(first - second), len(second - first))
+
+
+def _segment_set(segments: str) -> set[int]:
+    """The segments in a makemkvcon segment map such as "1-4,9"."""
+    found: set[int] = set()
+    for part in segments.split(","):
+        if "-" in part:
+            low, high = part.split("-")
+            found.update(range(int(low), int(high) + 1))
+        elif part.strip():
+            found.add(int(part))
+    return found
+
+
 def _copy_complete(log: Path) -> bool:
     if not log.is_file():
         return False
