@@ -105,6 +105,9 @@ The only required argument is the root directory to store all folders/files.  Th
 * /home/kevin
     * /MOVIE TITLE (This directory would store the large disk backup)
         * /MOVIE TITLE (YEAR) [tmdbid-ID] (This directory would store a file for each format (4k or 1080p))
+    * /SHOW TITLE
+        * /DISC LABEL (The large disk backups from one disc; "Disc N" if the disc has no label, and discripper asks for N)
+        * /SHOW TITLE (YEAR) [tmdbid-ID]/Season 01 (Episode files from every disc of the season)
 
 TITLE can be a partial title search or the full title.  Sometimes it is better to use less characters and let the search function work for you.
 

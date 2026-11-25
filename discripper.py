@@ -233,13 +233,16 @@ def chooseDiscTitles(kind, titles):
 class RipPlan:
     """Everything one run rips and encodes, settled before the first Disc title is ripped.
 
-    season is the Season number for TV and None for a movie.
+    season is the Season number for TV and None for a movie. folder is where the
+    Rips go; library is the root the Encodes' Library layout goes under. They're
+    the same for a movie; a TV disc's folder is inside library.
     """
     media: Media
     season: int | None
     titles: list[DiscTitle]
     formats: list[Format]
     folder: Path
+    library: Path
 
     def summary(self):
         media = self.media
@@ -257,10 +260,21 @@ def askTitle(kind):
         print("You need a search term ")
 
 
+def askDiscNumber():
+    """Ask until a whole number from 1 up is typed, for a disc with no Disc label."""
+    while True:
+        number = input("This disc has no label. Which disc of the set is it? ").strip()
+        if number.isdigit() and int(number) >= 1:
+            return int(number)
+        print("You need a disc number, such as 1 ")
+
+
 def planRip(args, lookup, disc):
     """Ask everything a run needs and return its RipPlan. Exits if no Disc titles are found.
 
-    Creates the rip folder, where makemkvcon's title listing log is kept.
+    Creates the rip folder. makemkvcon's title listing log is kept in the Media's
+    folder; for TV, the Rips go in a folder for this disc inside it, named after
+    its Disc label, or "Disc N" when it has none.
     """
     name, year = "", ""
     if args.tmdbid is None:
@@ -268,18 +282,23 @@ def planRip(args, lookup, disc):
         year = str(args.year) if args.year is not None else askYear(args.media)
     media, season = chooseMedia(lookup, args.media, name, year, args.tmdbid)
 
-    folder = Path(args.FOLDER) / "_".join(media.name.split())
-    folder.mkdir(parents=True, exist_ok=True)
-    infoLog = folder / "makemkvinfo.log"
+    library = Path(args.FOLDER) / "_".join(media.name.split())
+    library.mkdir(parents=True, exist_ok=True)
+    infoLog = library / "makemkvinfo.log"
     titles = disc.titles(infoLog)
     if not titles:
         print("makemkvcon found no titles to rip. Check that a disc is in the drive.")
         print(f"Please review {infoLog} for additional details.")
         sys.exit(1)
     print("Titles: " + str(len(titles)))
+    folder = library
+    if args.media == "tv":
+        # Discs of one Season can share Rip file names, so each disc gets its own folder.
+        folder = library / (disc.label(infoLog) or f"Disc {askDiscNumber()}")
+        folder.mkdir(exist_ok=True)
     return RipPlan(media=media, season=season.number if season else None,
                    titles=chooseDiscTitles(args.media, titles),
-                   formats=FORMATS[args.format], folder=folder)
+                   formats=FORMATS[args.format], folder=folder, library=library)
 
 
 def runRip(plan, disc, encoder):
@@ -288,7 +307,7 @@ def runRip(plan, disc, encoder):
         try:
             rip = disc.rip(title, plan.folder)
             print(f"Rip completed: {rip}")
-            for encoded in encodeFullMkv(encoder, rip, plan.media, plan.folder, plan.season,
+            for encoded in encodeFullMkv(encoder, rip, plan.media, plan.library, plan.season,
                                          plan.formats):
                 print(f"Encode completed: {encoded}")
         except RipFailed as err:

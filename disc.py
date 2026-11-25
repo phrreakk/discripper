@@ -24,6 +24,9 @@ _PLAYLIST = 16
 _SEGMENTS = 26
 _FILE_NAME = 27
 
+# The volume label (ap_iaVolumeName). The display name (CINFO:2) is often the
+# show's name on every disc of a TV box set, so it can't tell discs apart.
+_VOLUME_NAME = re.compile(r'^CINFO:32,\d+,"(.*)"$')
 _TINFO = re.compile(r'^TINFO:(\d+),(\d+),\d+,"(.*)"$')
 # "Title A is equal to title B and was skipped": makemkvcon leaves out playlist A
 # because it plays the same segments as B. Its last two fields are A and B.
@@ -86,6 +89,14 @@ class Disc:
                 for number, found in sorted(attributes.items())
                 # A Disc title with no file name can't be ripped, so it isn't offered.
                 if _FILE_NAME in found]
+
+    def label(self, log: Path) -> str | None:
+        """The Disc label in the info log that titles() wrote, or None if the disc has none."""
+        for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+            match = _VOLUME_NAME.match(line)
+            if match:
+                return match.group(1) or None
+        return None
 
     def rip(self, title: DiscTitle, folder: Path) -> Path:
         """Rip one Disc title into folder and return the Rip's path.
