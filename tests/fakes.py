@@ -1,4 +1,7 @@
-"""In-memory adapters for the run(args, log) seam that Disc and Encoder take."""
+"""In-memory adapters for the seams: run(args, log) that Disc and Encoder take,
+and fetch(path, params) that MediaLookup takes."""
+
+from media_lookup import LookupFailed
 
 
 class FakeTool:
@@ -30,3 +33,20 @@ def makemkv_that_copies(args):
     with open(f"{folder}/title_t{title:02d}.mkv", "w", encoding="utf-8"):
         pass
     return 'MSG:5036,260,1,"Copy complete. 1 titles saved.","Copy complete. %1 titles saved.","1"\n'
+
+
+class StrictTmdb:
+    """Fetch seam adapter with canned JSON keyed by path, which fails like TMDB for any other path.
+
+    Every request, answered or not, is recorded in calls.
+    """
+
+    def __init__(self, responses):
+        self.responses = responses
+        self.calls = []
+
+    def __call__(self, path, params):
+        self.calls.append((path, params))
+        if path not in self.responses:
+            raise LookupFailed(f"404 Not Found: {path}")
+        return self.responses[path]

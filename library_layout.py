@@ -45,7 +45,12 @@ def path_for(media: Media, format: Format, season: int | None = None,
         return folder / f"{_media_folder(media)} - {label}.mkv"
     if episode is None:
         raise ValueError("A TV episode needs an episode number")
-    return folder / f"{_name(media)} S{season:02d}E{episode:02d} - {label}.mkv"
+    return folder / f"{_name(media)} {episode_code(season, episode)} - {label}.mkv"
+
+
+def episode_code(season: int, episode: int) -> str:
+    """How file names and prompts name a TV episode, e.g. "S01E03"."""
+    return f"S{season:02d}E{episode:02d}"
 
 
 def _check_season(media: Media, season: int | None) -> None:

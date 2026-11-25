@@ -3,7 +3,7 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from library_layout import folder_for, path_for  # noqa: E402
+from library_layout import episode_code, folder_for, path_for  # noqa: E402
 from media_lookup import Media  # noqa: E402
 
 MOVIE = Media(kind="movie", tmdb_id=10191, name="How to Train Your Dragon", year="2010")
@@ -52,6 +52,10 @@ class TvLayoutTest(unittest.TestCase):
 
     def test_episode_numbers_past_99_are_not_truncated(self):
         self.assertTrue(str(path_for(SHOW, "4k", season=1, episode=101)).endswith("S01E101 - 2160p.mkv"))
+
+    def test_an_episode_code_is_the_zero_padded_season_and_episode(self):
+        self.assertEqual(episode_code(0, 1), "S00E01")
+        self.assertEqual(episode_code(1, 101), "S01E101")
 
     def test_tv_needs_season_and_episode(self):
         with self.assertRaises(ValueError):
