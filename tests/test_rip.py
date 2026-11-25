@@ -11,7 +11,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import discripper  # noqa: E402
 from disc import Disc, DiscTitle  # noqa: E402
 from encoder import Encoder  # noqa: E402
-from media_lookup import Media  # noqa: E402
+from media_lookup import Media, MediaLookup  # noqa: E402
+from tests.test_choose_media import DRAGON, DRAGONS_SHOW, SEASONS  # noqa: E402
+from tests.test_media_lookup import FakeTmdb  # noqa: E402
 from tests.fakes import FakeTool, handbrake_that_finishes, makemkv_that_copies  # noqa: E402
 
 MOVIE = Media(kind="movie", tmdb_id=10191, name="How to Train Your Dragon", year="2010")
@@ -67,7 +69,12 @@ class EncodeFullMkvTest(unittest.TestCase):
                                                          "DreamWorks_Dragons S01E01 - 1080p.mkv"])
 
 
-class RipAndEncodeTest(unittest.TestCase):
+def plan(media, folder, titles, season=None, formats=("4k",)):
+    return discripper.RipPlan(media=media, season=season, titles=titles, formats=list(formats),
+                              folder=folder)
+
+
+class RunRipTest(unittest.TestCase):
     def test_every_title_in_a_tv_range_is_ripped_and_encoded(self):
         folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
         makemkv = FakeTool(makemkv_that_copies)
@@ -75,8 +82,8 @@ class RipAndEncodeTest(unittest.TestCase):
         out = io.StringIO()
 
         with redirect_stdout(out):
-            discripper.ripAndEncode(Disc(makemkv), Encoder(handbrake, "x265_10bit"),
-                                    [title(2), title(3)], SHOW, folder, 1, ["1080p"])
+            discripper.runRip(plan(SHOW, folder, [title(2), title(3)], 1, ["1080p"]),
+                              Disc(makemkv), Encoder(handbrake, "x265_10bit"))
 
         self.assertEqual([args[-2] for args in makemkv.calls], ["2", "3"])
         self.assertIn("S01E02 - 1080p.mkv", out.getvalue())
@@ -86,12 +93,76 @@ class RipAndEncodeTest(unittest.TestCase):
         out = io.StringIO()
 
         with redirect_stdout(out), self.assertRaises(SystemExit) as exit:
-            discripper.ripAndEncode(Disc(FakeTool(lambda args: "")),
-                                    Encoder(FakeTool(handbrake_that_finishes), "x265_10bit"),
-                                    [title(7)], MOVIE, folder, None, ["4k"])
+            discripper.runRip(plan(MOVIE, folder, [title(7)]), Disc(FakeTool(lambda args: "")),
+                              Encoder(FakeTool(handbrake_that_finishes), "x265_10bit"))
 
         self.assertEqual(exit.exception.code, 1)
         self.assertIn("makemkvrip_t07.log", out.getvalue())
+
+
+class RipPlanSummaryTest(unittest.TestCase):
+    def test_a_movie_summary_names_the_media_and_folder(self):
+        summary = plan(MOVIE, Path("/rips/x"), []).summary()
+
+        self.assertEqual(summary, "We are going to rip How to Train Your Dragon (2010) "
+                                  "with TMDBID [tmdbid-10191] to /rips/x")
+
+    def test_a_tv_summary_also_names_the_season(self):
+        self.assertIn("DreamWorks Dragons - Season 2 (2012)",
+                      plan(SHOW, Path("/rips/x"), [], season=2).summary())
+
+
+def makemkv_listing(titles):
+    """What makemkvcon -r info prints for titles numbered 0 up."""
+    def output(args):
+        lines = []
+        for number in range(titles):
+            lines += [f'TINFO:{number},8,0,"5"', f'TINFO:{number},9,0,"0:22:10"',
+                      f'TINFO:{number},10,0,"4.0 GB"', f'TINFO:{number},27,0,"title_t{number:02d}.mkv"']
+        return "\n".join(lines) + "\n"
+    return output
+
+
+class PlanRipTest(unittest.TestCase):
+    def setUp(self):
+        self.folder = self.enterContext(tempfile.TemporaryDirectory())
+        self.out = io.StringIO()
+        self.enterContext(redirect_stdout(self.out))
+
+    def planRip(self, argv, typed, responses, titles=3):
+        args = discripper.parseArgs(argv + [self.folder])
+        lookup = MediaLookup(FakeTmdb(responses))
+        with mock.patch("builtins.input", side_effect=typed):
+            return discripper.planRip(args, lookup, Disc(FakeTool(makemkv_listing(titles))))
+
+    def test_a_movie_found_by_tmdb_id_asks_only_for_the_disc_title(self):
+        got = self.planRip(["--tmdbid", "10191", "-f", "1080p"], ["1"],
+                           {"movie/10191": DRAGON})
+
+        self.assertEqual(got, discripper.RipPlan(
+            media=MOVIE, season=None, titles=[title(1)], formats=["1080p"],
+            folder=Path(self.folder) / "How_to_Train_Your_Dragon"))
+        self.assertTrue(got.folder.is_dir())
+
+    def test_tv_asks_for_title_year_show_season_and_a_range(self):
+        typed = ["", "Dragons", "", "44305", "55501", "0", "2"]
+        got = self.planRip(["-m", "tv"], typed, {
+            "search/tv": {"total_results": 1, "results": [DRAGONS_SHOW]},
+            "tv/44305": DRAGONS_SHOW | {"seasons": SEASONS},
+        })
+
+        self.assertEqual(got.media, SHOW)
+        self.assertEqual(got.season, 1)
+        self.assertEqual([t.number for t in got.titles], [0, 1, 2])
+        self.assertEqual(got.formats, ["4k", "1080p"])
+        self.assertIn("You need a search term", self.out.getvalue())
+
+    def test_no_disc_titles_exits_before_asking_for_one(self):
+        with self.assertRaises(SystemExit) as exit:
+            self.planRip(["--tmdbid", "10191"], [], {"movie/10191": DRAGON}, titles=0)
+
+        self.assertEqual(exit.exception.code, 1)
+        self.assertIn("makemkvinfo.log", self.out.getvalue())
 
 
 class ChooseDiscTitlesTest(unittest.TestCase):

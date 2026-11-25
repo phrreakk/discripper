@@ -35,6 +35,10 @@ _Avoid_: version, quality
 The full-quality MKV that makemkvcon copies from one Disc title, before it's encoded.
 _Avoid_: backup, full MKV
 
+**Rip plan**:
+What one run will do, settled before anything is ripped: the Media, its Season for TV, the Disc titles to rip, the Formats to encode at, and the folder the Rips go in.
+_Avoid_: job, session
+
 **Encode**:
 A Rip re-encoded by HandBrake at one Format, written into the Library layout.
 _Avoid_: transcode

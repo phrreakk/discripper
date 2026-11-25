@@ -2,15 +2,17 @@
 
 import sys
 import shutil
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import argparse
 from dotenv import dotenv_values
 from prettytable import PrettyTable
 import library_layout
-from disc import Disc, RipFailed
+from library_layout import Format
+from disc import Disc, DiscTitle, RipFailed
 from encoder import ENCODERS, EncodeFailed, Encoder
-from media_lookup import LookupFailed, MediaLookup, NoResults, TooManyResults, tmdb_fetch
+from media_lookup import LookupFailed, Media, MediaLookup, NoResults, TooManyResults, tmdb_fetch
 from tool_run import tool
 
 
@@ -18,9 +20,9 @@ from tool_run import tool
 FORMATS = {"4k": ["4k"], "1080p": ["1080p"], "all": ["4k", "1080p"]}
 
 
-def loadEnvFile():
-    global dotenv
-    dotenv = dotenv_values(".env")
+def tmdbKey():
+    """The TMDB API key from .env in the current folder."""
+    return dotenv_values(".env")["TMDB_API_KEY"]
 
 
 def getRequirements():
@@ -201,13 +203,67 @@ def chooseDiscTitles(kind, titles):
     return [title for title in titles if start.number <= title.number <= end.number]
 
 
-def ripAndEncode(disc, encoder, titles, media, ripFolder, season, formats):
-    """Rip each Disc title, then encode each Rip at each Format. Exits if a step fails."""
-    for title in titles:
+@dataclass(frozen=True)
+class RipPlan:
+    """Everything one run rips and encodes, settled before the first Disc title is ripped.
+
+    season is the Season number for TV and None for a movie.
+    """
+    media: Media
+    season: int | None
+    titles: list[DiscTitle]
+    formats: list[Format]
+    folder: Path
+
+    def summary(self):
+        media = self.media
+        season = "" if self.season is None else f" - Season {self.season}"
+        return (f"We are going to rip {media.name}{season} ({media.year}) "
+                f"with TMDBID [tmdbid-{media.tmdb_id}] to {self.folder}")
+
+
+def askTitle(kind):
+    """Ask until a search term for the Media is typed."""
+    while True:
+        name = input("What is the {} title? ".format(kind))
+        if name != "":
+            return name
+        print("You need a search term ")
+
+
+def planRip(args, lookup, disc):
+    """Ask everything a run needs and return its RipPlan. Exits if no Disc titles are found.
+
+    Creates the rip folder, where makemkvcon's title listing log is kept.
+    """
+    name, year = "", ""
+    if args.tmdbid is None:
+        name = args.title if args.title is not None else askTitle(args.media)
+        year = str(args.year) if args.year is not None else askYear(args.media)
+    media, season = chooseMedia(lookup, args.media, name, year, args.tmdbid)
+
+    folder = Path(args.FOLDER) / "_".join(media.name.split())
+    folder.mkdir(parents=True, exist_ok=True)
+    infoLog = folder / "makemkvinfo.log"
+    titles = disc.titles(infoLog)
+    if not titles:
+        print("makemkvcon found no titles to rip. Check that a disc is in the drive.")
+        print(f"Please review {infoLog} for additional details.")
+        sys.exit(1)
+    print("Titles: " + str(len(titles)))
+    return RipPlan(media=media, season=season.number if season else None,
+                   titles=chooseDiscTitles(args.media, titles),
+                   formats=FORMATS[args.format], folder=folder)
+
+
+def runRip(plan, disc, encoder):
+    """Rip each Disc title in plan, then encode each Rip at each Format. Exits if a step fails."""
+    for title in plan.titles:
         try:
-            rip = disc.rip(title, ripFolder)
+            rip = disc.rip(title, plan.folder)
             print(f"Rip completed: {rip}")
-            for encoded in encodeFullMkv(encoder, rip, media, ripFolder, season, formats):
+            for encoded in encodeFullMkv(encoder, rip, plan.media, plan.folder, plan.season,
+                                         plan.formats):
                 print(f"Encode completed: {encoded}")
         except RipFailed as err:
             print("Disc did not complete.")
@@ -220,52 +276,13 @@ def ripAndEncode(disc, encoder, titles, media, ripFolder, season, formats):
 
 
 def main():
-    loadEnvFile()
     args = parseArgs(sys.argv[1:])
     makemkvcon, handBrake = getRequirements()
-
-    mediaTitle = ""
-    mediaYear = ""
-    if args.tmdbid is None:
-        if args.title is None:
-            while True:
-                mediaTitle = input("What is the {} title? ".format(args.media))
-                if mediaTitle == "":
-                    print("You need a search term ")
-                else:
-                    break
-        else:
-            mediaTitle = args.title
-
-        if args.year is None:
-            mediaYear = askYear(args.media)
-        else:
-            mediaYear = args.year
-
-    # Get movie/show info
-    lookup = MediaLookup(tmdb_fetch(dotenv["TMDB_API_KEY"]))
-    media, season = chooseMedia(lookup, args.media, mediaTitle, mediaYear, args.tmdbid)
-
-    ripFolder = Path(args.FOLDER) / "_".join(media.name.split())
-    ripFolder.mkdir(parents=True, exist_ok=True)
-
     disc = Disc(tool(makemkvcon))
-    infoLog = ripFolder / "makemkvinfo.log"
-    titles = disc.titles(infoLog)
-    if not titles:
-        print("makemkvcon found no titles to rip. Check that a disc is in the drive.")
-        print(f"Please review {infoLog} for additional details.")
-        sys.exit(1)
-    print("Titles: " + str(len(titles)))
-    chosen = chooseDiscTitles(args.media, titles)
-
-    if season:
-        print(f"We are going to rip {media.name} - Season {season.number} ({media.year}) with TMDBID [tmdbid-{media.tmdb_id}] to {ripFolder}")
-    else:
-        print(f"We are going to rip {media.name} ({media.year}) with TMDBID [tmdbid-{media.tmdb_id}] to {ripFolder}")
+    plan = planRip(args, MediaLookup(tmdb_fetch(tmdbKey())), disc)
+    print(plan.summary())
     print("Ripping...Please wait...")
-    ripAndEncode(disc, Encoder(tool(handBrake), args.encoder), chosen, media, ripFolder,
-                 season.number if season else None, FORMATS[args.format])
+    runRip(plan, disc, Encoder(tool(handBrake), args.encoder))
 
 
 if __name__ == "__main__":
