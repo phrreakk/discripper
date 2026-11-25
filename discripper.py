@@ -12,6 +12,7 @@ from prettytable import PrettyTable
 import library_layout
 from library_layout import Format
 from disc import Disc, DiscTitle, RipFailed, segments_differing
+import episode_pairing
 from encoder import ENCODERS, EncodeFailed, Encoder
 from media_lookup import LookupFailed, Media, MediaLookup, NoResults, TooManyResults, tmdb_fetch
 from tool_run import tool
@@ -161,41 +162,90 @@ def _chooseMedia(lookup, kind, name, year, tmdbId):
     return media, season
 
 
-def episodeNumber(seasonFolder, rip):
-    """The episode number of rip in a Season, counting rips in the order they were first encoded.
+def pairEpisodes(titles, media, season, lookup, library):
+    """Pair the chosen Disc titles with Episodes of the show, letting the user change the pairing.
 
-    Each Season folder keeps episode.list, one Rip path per line. A Rip is matched
-    by its folder and file name, since discs of one Season can name their Rips
-    the same, and added at the end the first time it's seen.
+    season is the Season number picked for the run; the proposal starts at its
+    first Episode with no Encode under library. Returns the accepted Pairings,
+    one per Disc title, in title-number order.
     """
-    listing = Path(seasonFolder) / "episode.list"
-    lines = listing.read_text(encoding="utf-8").splitlines() if listing.exists() else []
-    seen = [_ripKey(Path(line)) for line in lines if line.strip()]
-    if _ripKey(rip) not in seen:
-        with open(listing, "a", encoding="utf-8") as file:
-            file.write(str(rip) + "\n")
-        seen.append(_ripKey(rip))
-    return seen.index(_ripKey(rip)) + 1
+    episodes = {season: lookup.episodes(media, season)}
+
+    def hasEncode(seasonNumber, episode):
+        return any((library / library_layout.path_for(media, format, seasonNumber, episode)).is_file()
+                   for format in FORMATS["all"])
+
+    pairings = episode_pairing.propose(
+        titles, season, episodes[season],
+        encoded={e.number for e in episodes[season] if hasEncode(season, e.number)})
+    showPairings(pairings, hasEncode)
+    while True:
+        typed = input("Press Enter to accept, or change a title such as 3=5, 3=S0E1 or 3=-: ")
+        if typed.strip() == "":
+            if _confirmReplacing(pairings, hasEncode):
+                return pairings
+            continue
+        change = episode_pairing.parse_change(typed, season)
+        if change is None:
+            print("You need a change such as 3=5, 3=S0E1 or 3=-, or Enter to accept.")
+            continue
+        try:
+            pairings = _applyChange(pairings, change, lambda number: _seasonEpisodes(
+                episodes, lookup, media, number))
+        except (ValueError, LookupFailed) as err:
+            print(err)
+            continue
+        showPairings(pairings, hasEncode)
 
 
-def _ripKey(rip):
-    """What tells one Rip from another in episode.list: its disc folder and file name."""
-    return (Path(rip).parent.name, Path(rip).name)
+def _seasonEpisodes(episodes, lookup, media, season):
+    """The Episodes of season, fetched from TMDB the first time it's asked for and kept in episodes."""
+    if season not in episodes:
+        try:
+            episodes[season] = lookup.episodes(media, season)
+        except LookupFailed as err:
+            raise LookupFailed(f"Couldn't fetch Season {season} from TMDB: {err}") from err
+    return episodes[season]
 
 
-def encodeFullMkv(encoder, rip, media, parentFolder, season, formats):
+def _applyChange(pairings, change, episodesOf):
+    if change.episode is None:
+        return episode_pairing.skip(pairings, change.title)
+    return episode_pairing.reassign(pairings, change.title, change.season, change.episode,
+                                    episodesOf(change.season))
+
+
+def _confirmReplacing(pairings, hasEncode):
+    """Ask once whether to replace the Encodes of the paired Episodes that have one; True if none do."""
+    replacing = [f"S{p.season:02d}E{p.episode.number:02d}" for p in pairings
+                 if p.episode is not None and hasEncode(p.season, p.episode.number)]
+    if not replacing:
+        return True
+    answer = input(f"Replace the existing Encodes of {', '.join(replacing)}? [y/N] ")
+    return answer.strip().lower() in ("y", "yes")
+
+
+def showPairings(pairings, hasEncode):
+    table = PrettyTable()
+    table.field_names = ["Title", "Duration", "Episode", "Name", "Flags"]
+    table.align = "l"
+    for pairing in pairings:
+        episode = pairing.episode
+        table.add_row([pairing.title.number, pairing.title.duration,
+                       f"S{pairing.season:02d}E{episode.number:02d}" if episode else "-",
+                       episode.name if episode else "",
+                       ", ".join(episode_pairing.flags(pairing, hasEncode))])
+    print(table)
+
+
+def encodeFullMkv(encoder, rip, media, parentFolder, season, episode, formats):
     """Encode one Rip at each of formats into the Library layout under parentFolder.
 
-    season is the Season number for TV and None for a movie. Returns the encoded
-    paths, one per Format, in the order of formats.
+    season and episode are the Rip's Season and Episode numbers for TV, and None
+    for a movie. Returns the encoded paths, one per Format, in the order of formats.
     """
     parentFolder = Path(parentFolder)
-    seasonFolder = parentFolder / library_layout.folder_for(media, season)
-    seasonFolder.mkdir(parents=True, exist_ok=True)
-    episode = None
-    if media.kind == "tv":
-        episode = episodeNumber(seasonFolder, rip)
-        print(f"Episode {episode}")
+    (parentFolder / library_layout.folder_for(media, season)).mkdir(parents=True, exist_ok=True)
     encoded = []
     for format in formats:
         print(f"Encoding {format} file...Please wait...")
@@ -281,16 +331,26 @@ def parseNumberList(typed):
 
 
 @dataclass(frozen=True)
+class PlannedTitle:
+    """A Disc title in a Rip plan, with the Season and Episode it becomes for TV (None for a movie)."""
+    title: DiscTitle
+    season: int | None = None
+    episode: int | None = None
+
+
+@dataclass(frozen=True)
 class RipPlan:
     """Everything one run rips and encodes, settled before the first Disc title is ripped.
 
-    season is the Season number for TV and None for a movie. folder is where the
-    Rips go; library is the root the Encodes' Library layout goes under. They're
-    the same for a movie; a TV disc's folder is inside library.
+    season is the Season number picked for TV and None for a movie; a TV title
+    can be paired with another Season's Episode. titles holds only the Disc
+    titles to rip. folder is where the Rips go; library is the root the Encodes'
+    Library layout goes under. They're the same for a movie; a TV disc's folder
+    is inside library.
     """
     media: Media
     season: int | None
-    titles: list[DiscTitle]
+    titles: list[PlannedTitle]
     formats: list[Format]
     folder: Path
     library: Path
@@ -325,7 +385,9 @@ def planRip(args, lookup, disc):
 
     Creates the rip folder. makemkvcon's title listing log is kept in the Media's
     folder; for TV, the Rips go in a folder for this disc inside it, named after
-    its Disc label, or "Disc N" when it has none.
+    its Disc label, or "Disc N" when it has none. For TV, each chosen Disc title
+    is paired with an Episode, and skipped titles are left out of the plan.
+    Exits if TMDB can't be reached for the Season's Episodes.
     """
     name, year = "", ""
     if args.tmdbid is None:
@@ -347,19 +409,28 @@ def planRip(args, lookup, disc):
         # Discs of one Season can share Rip file names, so each disc gets its own folder.
         folder = library / (disc.label(infoLog) or f"Disc {askDiscNumber()}")
         folder.mkdir(exist_ok=True)
-    return RipPlan(media=media, season=season.number if season else None,
-                   titles=chooseDiscTitles(args.media, titles),
+    chosen = chooseDiscTitles(args.media, titles)
+    planned = [PlannedTitle(title) for title in chosen]
+    if args.media == "tv":
+        try:
+            pairings = pairEpisodes(chosen, media, season.number, lookup, library)
+        except LookupFailed as err:
+            print(f"TMDB request failed: {err}")
+            sys.exit(1)
+        planned = [PlannedTitle(p.title, p.season, p.episode.number)
+                   for p in pairings if p.episode is not None]
+    return RipPlan(media=media, season=season.number if season else None, titles=planned,
                    formats=FORMATS[args.format], folder=folder, library=library)
 
 
 def runRip(plan, disc, encoder):
     """Rip each Disc title in plan, then encode each Rip at each Format. Exits if a step fails."""
-    for title in plan.titles:
+    for planned in plan.titles:
         try:
-            rip = disc.rip(title, plan.folder)
+            rip = disc.rip(planned.title, plan.folder)
             print(f"Rip completed: {rip}")
-            for encoded in encodeFullMkv(encoder, rip, plan.media, plan.library, plan.season,
-                                         plan.formats):
+            for encoded in encodeFullMkv(encoder, rip, plan.media, plan.library, planned.season,
+                                         planned.episode, plan.formats):
                 print(f"Encode completed: {encoded}")
         except RipFailed as err:
             print("Disc did not complete.")

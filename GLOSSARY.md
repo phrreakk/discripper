@@ -30,6 +30,10 @@ _Avoid_: title (on its own), track
 The folders and file names Jellyfin expects, so it can match each encoded file to its Media on TMDB.
 _Avoid_: naming scheme, folder structure
 
+**Pairing**:
+The Episode one Disc title becomes for TV, given as a Season and an Episode number. It's usually in the Season picked for the run, but can be in another, such as Season 0. A Disc title can also be skipped.
+_Avoid_: mapping, assignment
+
 **Format**:
 The resolution an encode is made at: 4k (labelled 2160p in file names) or 1080p. One rip can be encoded in both.
 _Avoid_: version, quality
@@ -39,7 +43,7 @@ The full-quality MKV that makemkvcon copies from one Disc title, before it's enc
 _Avoid_: backup, full MKV
 
 **Rip plan**:
-What one run will do, settled before anything is ripped: the Media, its Season for TV, the Disc titles to rip, the Formats to encode at, and the folder the Rips go in.
+What one run will do, settled before anything is ripped: the Media, its Season for TV, the Disc titles to rip, the Episode each Disc title becomes for TV, the Formats to encode at, and the folder the Rips go in.
 _Avoid_: job, session
 
 **Encode**:

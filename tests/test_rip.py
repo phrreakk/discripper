@@ -14,12 +14,14 @@ from disc import Disc, DiscTitle  # noqa: E402
 from encoder import Encoder  # noqa: E402
 from media_lookup import Media, MediaLookup  # noqa: E402
 from tests.test_choose_media import DRAGON, DRAGONS_SHOW, SEASONS  # noqa: E402
-from tests.test_media_lookup import FakeTmdb  # noqa: E402
+from tests.test_pair_episodes import StrictTmdb  # noqa: E402
 from tests.planes_titles import EXTRA, T02, T03, T04  # noqa: E402
 from tests.fakes import FakeTool, handbrake_that_finishes, makemkv_that_copies  # noqa: E402
 
 MOVIE = Media(kind="movie", tmdb_id=10191, name="How to Train Your Dragon", year="2010")
 SHOW = Media(kind="tv", tmdb_id=44305, name="DreamWorks Dragons", year="2012")
+EPISODES = {"episodes": [{"episode_number": n, "name": f"Episode {n}", "runtime": 22}
+                         for n in range(1, 21)]}
 MOVIE_FOLDER = "How_to_Train_Your_Dragon (2010) [tmdbid-10191]"
 SEASON_FOLDER = "DreamWorks_Dragons (2012) [tmdbid-44305]/Season 01"
 
@@ -36,9 +38,9 @@ class EncodeFullMkvTest(unittest.TestCase):
         self.encoder = Encoder(self.handbrake, "x265_10bit")
         self.enterContext(redirect_stdout(io.StringIO()))
 
-    def encode(self, media, rip_name, season, formats):
+    def encode(self, media, rip_name, season, formats, episode=None):
         return discripper.encodeFullMkv(self.encoder, self.folder / rip_name, media, self.folder,
-                                        season, formats)
+                                        season, episode, formats)
 
     def test_a_movie_is_encoded_at_each_format_into_the_library_layout(self):
         encoded = self.encode(MOVIE, "title_t00.mkv", None, ["4k", "1080p"])
@@ -54,21 +56,27 @@ class EncodeFullMkvTest(unittest.TestCase):
         self.assertEqual([path.name for path in encoded], [f"{MOVIE_FOLDER} - 1080p.mkv"])
         self.assertEqual(len(self.handbrake.calls), 1)
 
-    def test_tv_rips_become_episodes_in_the_order_they_are_encoded(self):
-        first = self.encode(SHOW, "title_t03.mkv", 1, ["4k"])
-        second = self.encode(SHOW, "title_t04.mkv", 1, ["4k"])
+    def test_a_tv_rip_is_named_from_the_episode_it_is_paired_with(self):
+        encoded = self.encode(SHOW, "title_t03.mkv", 1, ["4k", "1080p"], episode=7)
 
-        self.assertEqual(first, [self.folder / SEASON_FOLDER / "DreamWorks_Dragons S01E01 - 2160p.mkv"])
-        self.assertEqual(second, [self.folder / SEASON_FOLDER / "DreamWorks_Dragons S01E02 - 2160p.mkv"])
+        self.assertEqual(encoded, [
+            self.folder / SEASON_FOLDER / "DreamWorks_Dragons S01E07 - 2160p.mkv",
+            self.folder / SEASON_FOLDER / "DreamWorks_Dragons S01E07 - 1080p.mkv",
+        ])
 
-    def test_a_tv_rip_encoded_again_keeps_its_episode_number_at_every_format(self):
-        self.encode(SHOW, "title_t03.mkv", 1, ["4k", "1080p"])
-        self.encode(SHOW, "title_t04.mkv", 1, ["4k", "1080p"])
+    def test_an_old_episode_list_is_ignored(self):
+        (self.folder / SEASON_FOLDER).mkdir(parents=True)
+        listing = self.folder / SEASON_FOLDER / "episode.list"
+        listing.write_text(f"{self.folder / 'D1' / 'title_t03.mkv'}\n", encoding="utf-8")
 
-        again = self.encode(SHOW, "title_t03.mkv", 1, ["4k", "1080p"])
+        encoded = self.encode(SHOW, "D1/title_t03.mkv", 1, ["4k"], episode=4)
 
-        self.assertEqual([path.name for path in again], ["DreamWorks_Dragons S01E01 - 2160p.mkv",
-                                                         "DreamWorks_Dragons S01E01 - 1080p.mkv"])
+        self.assertEqual([path.name for path in encoded], ["DreamWorks_Dragons S01E04 - 2160p.mkv"])
+        self.assertEqual(listing.read_text(encoding="utf-8").count("\n"), 1)
+
+
+def episode(number, season, episode):
+    return discripper.PlannedTitle(title(number), season, episode)
 
 
 def plan(media, folder, titles, season=None, formats=("4k",), library=None):
@@ -84,16 +92,17 @@ class RunRipTest(unittest.TestCase):
         out = io.StringIO()
 
         with redirect_stdout(out):
-            discripper.runRip(plan(SHOW, folder, [title(2), title(3)], 1, ["1080p"]),
+            discripper.runRip(plan(SHOW, folder, [episode(2, 1, 5), episode(3, 1, 6)], 1, ["1080p"]),
                               Disc(makemkv), Encoder(handbrake, "x265_10bit"))
 
         self.assertEqual([args[-2] for args in makemkv.calls], ["2", "3"])
-        self.assertIn("S01E02 - 1080p.mkv", out.getvalue())
+        self.assertIn("S01E05 - 1080p.mkv", out.getvalue())
+        self.assertIn("S01E06 - 1080p.mkv", out.getvalue())
 
     def test_rips_go_in_the_disc_folder_and_encodes_in_the_library(self):
         show = Path(self.enterContext(tempfile.TemporaryDirectory()))
         with redirect_stdout(io.StringIO()):
-            discripper.runRip(plan(SHOW, show / "D2", [title(0)], 1, ["1080p"], library=show),
+            discripper.runRip(plan(SHOW, show / "D2", [episode(0, 1, 1)], 1, ["1080p"], library=show),
                               Disc(FakeTool(makemkv_that_copies)),
                               Encoder(FakeTool(handbrake_that_finishes), "x265_10bit"))
 
@@ -105,8 +114,9 @@ class RunRipTest(unittest.TestCase):
         makemkv = FakeTool(makemkv_that_copies)
         handbrake = FakeTool(handbrake_that_finishes)
         with redirect_stdout(io.StringIO()):
-            for disc in ["D1", "D2"]:
-                discripper.runRip(plan(SHOW, show / disc, [title(0)], 1, ["1080p"], library=show),
+            for number, disc in enumerate(["D1", "D2"], start=1):
+                discripper.runRip(plan(SHOW, show / disc, [episode(0, 1, number)], 1, ["1080p"],
+                                       library=show),
                                   Disc(makemkv), Encoder(handbrake, "x265_10bit"))
 
         self.assertEqual(len(makemkv.calls), 2)
@@ -116,12 +126,24 @@ class RunRipTest(unittest.TestCase):
                          ["DreamWorks_Dragons S01E01 - 1080p.mkv",
                           "DreamWorks_Dragons S01E02 - 1080p.mkv"])
 
+    def test_a_title_paired_with_another_season_is_encoded_into_that_seasons_folder(self):
+        show = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        with redirect_stdout(io.StringIO()):
+            discripper.runRip(plan(SHOW, show / "D1", [episode(1, 0, 1), episode(4, 1, 1)], 1,
+                                   ["4k"], library=show),
+                              Disc(FakeTool(makemkv_that_copies)),
+                              Encoder(FakeTool(handbrake_that_finishes), "x265_10bit"))
+
+        shelf = show / "DreamWorks_Dragons (2012) [tmdbid-44305]"
+        self.assertTrue((shelf / "Season 00" / "DreamWorks_Dragons S00E01 - 2160p.mkv").is_file())
+        self.assertTrue((shelf / "Season 01" / "DreamWorks_Dragons S01E01 - 2160p.mkv").is_file())
+
     def test_a_failed_rip_exits_and_points_at_its_log(self):
         folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
         out = io.StringIO()
 
         with redirect_stdout(out), self.assertRaises(SystemExit) as exit:
-            discripper.runRip(plan(MOVIE, folder, [title(7)]), Disc(FakeTool(lambda args: "")),
+            discripper.runRip(plan(MOVIE, folder, [discripper.PlannedTitle(title(7))]), Disc(FakeTool(lambda args: "")),
                               Encoder(FakeTool(handbrake_that_finishes), "x265_10bit"))
 
         self.assertEqual(exit.exception.code, 1)
@@ -159,35 +181,41 @@ class PlanRipTest(unittest.TestCase):
 
     def planRip(self, argv, typed, responses, titles=3, label=None):
         args = discripper.parseArgs(argv + [self.folder])
-        lookup = MediaLookup(FakeTmdb(responses))
+        lookup = MediaLookup(StrictTmdb(responses))
         with mock.patch("builtins.input", side_effect=typed):
             return discripper.planRip(args, lookup, Disc(FakeTool(makemkv_listing(titles, label))))
 
-    def planTv(self, typed, label=None):
-        """Plan a TV rip of DreamWorks Dragons Season 1 found by TMDB id, ripping titles 0 to 2."""
-        return self.planRip(["-m", "tv", "--tmdbid", "44305"], ["55501", *typed, "0", "2"],
-                            {"tv/44305": DRAGONS_SHOW | {"seasons": SEASONS}}, label=label)
+    def planTv(self, typed, label=None, pairing=("",)):
+        """Plan a TV rip of DreamWorks Dragons Season 1 found by TMDB id, ripping titles 0 to 2.
+
+        typed answers the questions before the Disc titles; pairing answers the reassign prompt.
+        """
+        return self.planRip(["-m", "tv", "--tmdbid", "44305"], ["55501", *typed, "0-2", *pairing],
+                            {"tv/44305": DRAGONS_SHOW | {"seasons": SEASONS},
+                             "tv/44305/season/1": EPISODES, "tv/44305/season/0": EPISODES},
+                            label=label)
 
     def test_a_movie_found_by_tmdb_id_asks_only_for_the_disc_title(self):
         got = self.planRip(["--tmdbid", "10191", "-f", "1080p"], ["1"],
                            {"movie/10191": DRAGON})
 
         self.assertEqual(got, discripper.RipPlan(
-            media=MOVIE, season=None, titles=[title(1)], formats=["1080p"],
+            media=MOVIE, season=None, titles=[discripper.PlannedTitle(title(1))], formats=["1080p"],
             folder=Path(self.folder) / "How_to_Train_Your_Dragon",
             library=Path(self.folder) / "How_to_Train_Your_Dragon"))
         self.assertTrue(got.folder.is_dir())
 
     def test_tv_asks_for_name_year_show_season_and_a_list_of_disc_titles(self):
-        typed = ["", "Dragons", "", "44305", "55501", "1", "0-2"]
+        typed = ["", "Dragons", "", "44305", "55501", "1", "0-2", ""]
         got = self.planRip(["-m", "tv"], typed, {
             "search/tv": {"total_results": 1, "results": [DRAGONS_SHOW]},
             "tv/44305": DRAGONS_SHOW | {"seasons": SEASONS},
+            "tv/44305/season/1": EPISODES,
         })
 
         self.assertEqual(got.media, SHOW)
         self.assertEqual(got.season, 1)
-        self.assertEqual([t.number for t in got.titles], [0, 1, 2])
+        self.assertEqual([t.title.number for t in got.titles], [0, 1, 2])
         self.assertEqual(got.formats, ["4k", "1080p"])
         self.assertIn("You need a search term", self.out.getvalue())
 
@@ -208,6 +236,19 @@ class PlanRipTest(unittest.TestCase):
 
         self.assertEqual(got.folder, Path(self.folder) / "DreamWorks_Dragons" / "Disc 3")
         self.assertEqual(self.out.getvalue().count("You need a disc number"), 2)
+
+    def test_the_tv_rip_plan_holds_each_titles_episode_and_leaves_skipped_titles_out(self):
+        got = self.planTv([], label="D1", pairing=["1=-", "2=S0E1", ""])
+
+        self.assertEqual(got.titles, [episode(0, 1, 1), episode(2, 0, 1)])
+
+    def test_a_season_tmdb_cannot_fetch_exits(self):
+        with self.assertRaises(SystemExit) as exit:
+            self.planRip(["-m", "tv", "--tmdbid", "44305"], ["55501", "0-2"],
+                         {"tv/44305": DRAGONS_SHOW | {"seasons": SEASONS}}, label="D1")
+
+        self.assertEqual(exit.exception.code, 1)
+        self.assertIn("TMDB request failed", self.out.getvalue())
 
     def test_no_disc_titles_exits_before_asking_for_one(self):
         with self.assertRaises(SystemExit) as exit:
