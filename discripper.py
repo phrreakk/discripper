@@ -20,9 +20,14 @@ from tool_run import tool
 FORMATS = {"4k": ["4k"], "1080p": ["1080p"], "all": ["4k", "1080p"]}
 
 
-def tmdbKey():
-    """The TMDB API key from .env in the current folder."""
-    return dotenv_values(".env")["TMDB_API_KEY"]
+def tmdbKey(envFile=".env"):
+    """The TMDB API key from envFile; exits with how to set it if it's missing or blank."""
+    key = dotenv_values(envFile).get("TMDB_API_KEY")
+    if not key:
+        print(f"No TMDB_API_KEY found in {Path(envFile).resolve()}.")
+        print("Add a line like this to that file: TMDB_API_KEY=<your TMDB read token>")
+        sys.exit(1)
+    return key
 
 
 def getRequirements():
