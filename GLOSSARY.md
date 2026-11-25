@@ -30,3 +30,11 @@ _Avoid_: naming scheme, folder structure
 **Format**:
 The resolution an encode is made at: 4k (labelled 2160p in file names) or 1080p. One rip can be encoded in both.
 _Avoid_: version, quality
+
+**Rip**:
+The full-quality MKV that makemkvcon copies from one Disc title, before it's encoded.
+_Avoid_: backup, full MKV
+
+**Encode**:
+A Rip re-encoded by HandBrake at one Format, written into the Library layout.
+_Avoid_: transcode

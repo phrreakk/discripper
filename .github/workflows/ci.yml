@@ -15,5 +15,5 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked
-      - run: uv run pylint discripper.py media_lookup.py library_layout.py
+      - run: uv run pylint discripper.py media_lookup.py library_layout.py disc.py encoder.py tool_run.py
       - run: uv run python -m unittest discover -s tests -t . -v
