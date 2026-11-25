@@ -115,7 +115,7 @@ For TV, you pick the Disc titles to rip as a list such as `1-4,6`. discripper th
 * `3=5` puts Disc title 3 on Episode 5 of the Season you picked, and `3=S0E1` puts it on Season 0 Episode 1. The titles after it that you haven't set yourself follow on in order.
 * `3=-` skips Disc title 3.
 
-The table flags a Disc title whose length is more than 5 minutes off the Episode's TMDB runtime, an Episode that is already encoded, and a title past the end of the Season ("no episode"), which isn't ripped. If you accept pairings that are already encoded, discripper asks once before replacing them.
+The table flags a Disc title whose length is more than 5 minutes off the Episode's TMDB runtime, an Episode that is already encoded, and a title past the end of the Season ("no episode"), which isn't ripped. If you accept pairings that would overwrite Encodes at the Formats you're ripping, discripper asks once before replacing them. Two Disc titles can't share an Episode: the table flags them, and Enter asks you to change one first.
 
 TITLE can be a partial title search or the full title.  Sometimes it is better to use less characters and let the search function work for you.
 

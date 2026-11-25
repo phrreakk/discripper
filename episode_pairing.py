@@ -77,11 +77,26 @@ def skip(pairings, title_number):
     return result
 
 
-def flags(pairing, has_encode):
-    """Warnings to show beside a pairing. has_encode(season, episode) tells if that Episode has an Encode."""
+def shared(pairings):
+    """The Episodes more than one Disc title is paired with, as {(season, episode): [title numbers]}."""
+    titles = {}
+    for pairing in pairings:
+        if pairing.episode is not None:
+            titles.setdefault((pairing.season, pairing.episode.number), []).append(pairing.title.number)
+    return {episode: numbers for episode, numbers in titles.items() if len(numbers) > 1}
+
+
+def flags(pairing, has_encode, pairings=()):
+    """Warnings to show beside a pairing.
+
+    has_encode(season, episode) tells if that Episode has an Encode. pairings,
+    the whole pairing list, lets the other titles on the same Episode be named.
+    """
     if pairing.episode is None:
         return ["skipped" if pairing.skipped else "no episode"]
-    found = []
+    found = [f"also title {number}"
+             for number in shared(pairings).get((pairing.season, pairing.episode.number), [])
+             if number != pairing.title.number]
     seconds = _seconds(pairing.title.duration)
     runtime = pairing.episode.runtime
     if runtime is not None and seconds is not None \
@@ -103,11 +118,11 @@ def _seconds(duration):
 
 @dataclass(frozen=True)
 class Change:
-    """A typed change to the pairing: Disc title title becomes Episode episode of season.
+    """A typed change to the pairing: Disc title title_number becomes Episode episode of season.
 
-    season and episode are both None to skip the title.
+    season and episode are both None to skip the Disc title.
     """
-    title: int
+    title_number: int
     season: int | None
     episode: int | None
 

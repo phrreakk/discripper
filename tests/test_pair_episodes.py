@@ -10,8 +10,8 @@ from unittest import mock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import discripper  # noqa: E402
 from disc import DiscTitle  # noqa: E402
-from media_lookup import LookupFailed, Media, MediaLookup  # noqa: E402
-from tests.test_media_lookup import FakeTmdb  # noqa: E402
+from media_lookup import Media, MediaLookup  # noqa: E402
+from tests.fakes import StrictTmdb  # noqa: E402
 
 SHOW = Media(kind="tv", tmdb_id=4269, name="The Transformers", year="1984")
 SEASON_FOLDER = "The_Transformers (1984) [tmdbid-4269]/Season {:02d}"
@@ -46,16 +46,6 @@ def tables(printed):
     return found
 
 
-class StrictTmdb(FakeTmdb):
-    """FakeTmdb that fails like TMDB does for a path it has no answer for."""
-
-    def __call__(self, path, params):
-        if path not in self.responses:
-            self.calls.append((path, params))
-            raise LookupFailed(f"404 Not Found: {path}")
-        return super().__call__(path, params)
-
-
 class PairEpisodesTest(unittest.TestCase):
     def setUp(self):
         self.library = Path(self.enterContext(tempfile.TemporaryDirectory()))
@@ -66,12 +56,12 @@ class PairEpisodesTest(unittest.TestCase):
         folder.mkdir(parents=True, exist_ok=True)
         (folder / f"The_Transformers S{season_number:02d}E{episode:02d} - {label}.mkv").touch()
 
-    def pair(self, typed, titles=None, picked=1):
+    def pair(self, typed, titles=None, picked=1, formats=("4k", "1080p")):
         titles = [title(n) for n in range(1, 6)] if titles is None else titles
         self.out = io.StringIO()
         with mock.patch("builtins.input", side_effect=typed), redirect_stdout(self.out):
             pairings = discripper.pairEpisodes(titles, SHOW, picked, MediaLookup(self.tmdb),
-                                               self.library)
+                                               self.library, list(formats))
         self.tables = tables(self.out.getvalue())
         return [(p.title.number, p.season, p.episode.number if p.episode else None)
                 for p in pairings]
@@ -135,7 +125,8 @@ class PairEpisodesTest(unittest.TestCase):
         with mock.patch("builtins.input", side_effect=["1=1", "", "n", "", "y"]) as typed, \
                 redirect_stdout(io.StringIO()):
             pairings = discripper.pairEpisodes([title(n) for n in range(1, 4)], SHOW, 1,
-                                               MediaLookup(self.tmdb), self.library)
+                                               MediaLookup(self.tmdb), self.library,
+                                               ["4k", "1080p"])
 
         self.assertEqual([p.episode.number for p in pairings], [1, 2, 3])
         prompts = [call.args[0] for call in typed.call_args_list]
@@ -149,6 +140,34 @@ class PairEpisodesTest(unittest.TestCase):
         got = self.pair(["3=1", "3=-", ""], titles=[title(3)])
 
         self.assertEqual(got, [(3, 1, None)])
+
+    def test_only_encodes_this_run_would_write_are_confirmed_for_replacing(self):
+        self.encode(1, 1, "2160p")
+        self.encode(1, 2, "1080p")
+
+        with mock.patch("builtins.input", side_effect=["1=1", "", "y"]) as typed, \
+                redirect_stdout(io.StringIO()):
+            discripper.pairEpisodes([title(1), title(2)], SHOW, 1, MediaLookup(self.tmdb),
+                                    self.library, ["1080p"])
+
+        prompts = [call.args[0] for call in typed.call_args_list]
+        self.assertIn("S01E02", prompts[2])
+        self.assertNotIn("S01E01", prompts[2])
+
+    def test_an_encode_at_another_format_is_not_confirmed(self):
+        self.encode(1, 1, "2160p")
+
+        got = self.pair(["1=1", ""], titles=[title(1)], formats=["1080p"])
+
+        self.assertEqual(got, [(1, 1, 1)])
+        self.assertEqual(self.tables[1][0]["Flags"], "already encoded")
+
+    def test_enter_is_refused_while_two_titles_share_an_episode(self):
+        got = self.pair(["3=1", "", "3=-", ""], titles=[title(1), title(2), title(3)])
+
+        self.assertEqual(got, [(1, 1, 1), (2, 1, 2), (3, 1, None)])
+        self.assertEqual(self.tables[1][0]["Flags"], "also title 3")
+        self.assertIn("Disc titles 1 and 3 share S01E01", self.out.getvalue())
 
 
 if __name__ == "__main__":

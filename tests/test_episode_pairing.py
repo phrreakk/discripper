@@ -5,7 +5,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from disc import DiscTitle  # noqa: E402
 from episode_pairing import (  # noqa: E402
-    RUNTIME_TOLERANCE_MINUTES, Change, Pairing, flags, parse_change, propose, reassign, skip)
+    RUNTIME_TOLERANCE_MINUTES, Change, Pairing, flags, parse_change, propose, reassign, shared,
+    skip)
 from media_lookup import Episode  # noqa: E402
 
 
@@ -126,6 +127,26 @@ class FlagsTest(unittest.TestCase):
     def test_a_skipped_title_is_flagged_skipped(self):
         self.assertEqual(flags(Pairing(title(1), 1, None, skipped=True), nothing_encoded),
                          ["skipped"])
+
+    def test_titles_on_the_same_episode_are_flagged_with_each_other(self):
+        pairings = reassign(propose(FIVE_TITLES, 1, SEASON_1, encoded=set()), 3, 1, 4, SEASON_1)
+        pairings = reassign(pairings, 1, 1, 4, SEASON_1)
+
+        self.assertEqual(flags(pairings[0], nothing_encoded, pairings), ["also title 3"])
+        self.assertEqual(flags(pairings[2], nothing_encoded, pairings), ["also title 1"])
+        self.assertEqual(flags(pairings[1], nothing_encoded, pairings), [])
+
+
+class SharedTest(unittest.TestCase):
+    def test_episodes_paired_with_more_than_one_title_are_listed_with_their_titles(self):
+        pairings = reassign(propose(FIVE_TITLES, 1, SEASON_1, encoded=set()), 2, 1, 1, SEASON_1)
+
+        self.assertEqual(shared(pairings), {(1, 1): [1, 2]})
+
+    def test_skipped_titles_and_titles_with_no_episode_share_nothing(self):
+        pairings = skip(skip(propose(FIVE_TITLES, 1, SEASON_1[:1], encoded=set()), 1), 2)
+
+        self.assertEqual(shared(pairings), {})
 
 
 class ParseChangeTest(unittest.TestCase):

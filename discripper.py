@@ -162,18 +162,25 @@ def _chooseMedia(lookup, kind, name, year, tmdbId):
     return media, season
 
 
-def pairEpisodes(titles, media, season, lookup, library):
+def pairEpisodes(titles, media, season, lookup, library, formats):
     """Pair the chosen Disc titles with Episodes of the show, letting the user change the pairing.
 
     season is the Season number picked for the run; the proposal starts at its
-    first Episode with no Encode under library. Returns the accepted Pairings,
-    one per Disc title, in title-number order.
+    first Episode with an Encode at no Format under library. Accepting asks once
+    before replacing Encodes at formats, the Formats this run encodes at.
+    Returns the accepted Pairings, one per Disc title, in title-number order.
     """
     episodes = {season: lookup.episodes(media, season)}
 
-    def hasEncode(seasonNumber, episode):
+    def encodedAt(seasonNumber, episode, atFormats):
         return any((library / library_layout.path_for(media, format, seasonNumber, episode)).is_file()
-                   for format in FORMATS["all"])
+                   for format in atFormats)
+
+    def hasEncode(seasonNumber, episode):
+        return encodedAt(seasonNumber, episode, FORMATS["all"])
+
+    def replaces(seasonNumber, episode):
+        return encodedAt(seasonNumber, episode, formats)
 
     pairings = episode_pairing.propose(
         titles, season, episodes[season],
@@ -182,7 +189,7 @@ def pairEpisodes(titles, media, season, lookup, library):
     while True:
         typed = input("Press Enter to accept, or change a title such as 3=5, 3=S0E1 or 3=-: ")
         if typed.strip() == "":
-            if _confirmReplacing(pairings, hasEncode):
+            if _noSharedEpisodes(pairings) and _confirmReplacing(pairings, replaces):
                 return pairings
             continue
         change = episode_pairing.parse_change(typed, season)
@@ -208,17 +215,31 @@ def _seasonEpisodes(episodes, lookup, media, season):
     return episodes[season]
 
 
+def _noSharedEpisodes(pairings):
+    """True if no two Disc titles are paired with one Episode; otherwise say which are."""
+    shared = episode_pairing.shared(pairings)
+    for (seasonNumber, episode), numbers in shared.items():
+        listed = ", ".join(str(number) for number in numbers[:-1]) + f" and {numbers[-1]}"
+        print(f"Disc titles {listed} share {library_layout.episode_code(seasonNumber, episode)}. "
+              "Change or skip all but one of them.")
+    return not shared
+
+
 def _applyChange(pairings, change, episodesOf):
+    """The pairings with change made; episodesOf(season) gives the Episodes of a Season."""
     if change.episode is None:
-        return episode_pairing.skip(pairings, change.title)
-    return episode_pairing.reassign(pairings, change.title, change.season, change.episode,
+        return episode_pairing.skip(pairings, change.title_number)
+    return episode_pairing.reassign(pairings, change.title_number, change.season, change.episode,
                                     episodesOf(change.season))
 
 
-def _confirmReplacing(pairings, hasEncode):
-    """Ask once whether to replace the Encodes of the paired Episodes that have one; True if none do."""
-    replacing = [f"S{p.season:02d}E{p.episode.number:02d}" for p in pairings
-                 if p.episode is not None and hasEncode(p.season, p.episode.number)]
+def _confirmReplacing(pairings, replaces):
+    """Ask once whether to replace the Encodes this run would overwrite; True if it overwrites none.
+
+    replaces(season, episode) tells if encoding that Episode overwrites an Encode.
+    """
+    replacing = [library_layout.episode_code(p.season, p.episode.number) for p in pairings
+                 if p.episode is not None and replaces(p.season, p.episode.number)]
     if not replacing:
         return True
     answer = input(f"Replace the existing Encodes of {', '.join(replacing)}? [y/N] ")
@@ -226,15 +247,16 @@ def _confirmReplacing(pairings, hasEncode):
 
 
 def showPairings(pairings, hasEncode):
+    """Print each Disc title with its Episode and flags; hasEncode(season, episode) tells if it has an Encode."""
     table = PrettyTable()
     table.field_names = ["Title", "Duration", "Episode", "Name", "Flags"]
     table.align = "l"
     for pairing in pairings:
         episode = pairing.episode
         table.add_row([pairing.title.number, pairing.title.duration,
-                       f"S{pairing.season:02d}E{episode.number:02d}" if episode else "-",
+                       library_layout.episode_code(pairing.season, episode.number) if episode else "-",
                        episode.name if episode else "",
-                       ", ".join(episode_pairing.flags(pairing, hasEncode))])
+                       ", ".join(episode_pairing.flags(pairing, hasEncode, pairings))])
     print(table)
 
 
@@ -413,7 +435,8 @@ def planRip(args, lookup, disc):
     planned = [PlannedTitle(title) for title in chosen]
     if args.media == "tv":
         try:
-            pairings = pairEpisodes(chosen, media, season.number, lookup, library)
+            pairings = pairEpisodes(chosen, media, season.number, lookup, library,
+                                    FORMATS[args.format])
         except LookupFailed as err:
             print(f"TMDB request failed: {err}")
             sys.exit(1)

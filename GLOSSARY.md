@@ -32,7 +32,7 @@ _Avoid_: naming scheme, folder structure
 
 **Pairing**:
 The Episode one Disc title becomes for TV, given as a Season and an Episode number. It's usually in the Season picked for the run, but can be in another, such as Season 0. A Disc title can also be skipped.
-_Avoid_: mapping, assignment
+_Avoid_: mapping
 
 **Format**:
 The resolution an encode is made at: 4k (labelled 2160p in file names) or 1080p. One rip can be encoded in both.
