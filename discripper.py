@@ -245,7 +245,7 @@ def askDiscTitleList(prompt, titles):
         if ranges is None:
             print("You need title numbers and ranges from the table, such as 1-4,6: " + listed)
             continue
-        missing = [missed for first, last in ranges for missed in _notInTable(first, last, byNumber)]
+        missing = [label for first, last in ranges for label in _missingLabels(first, last, byNumber)]
         if missing:
             print(f"Not in the table: {', '.join(missing)}. The titles are: {listed}")
             continue
@@ -253,14 +253,17 @@ def askDiscTitleList(prompt, titles):
                 if any(first <= number <= last for first, last in ranges)]
 
 
-def _notInTable(first, last, byNumber):
-    """The numbers from first to last that aren't in byNumber, or the whole range if it's longer than the table."""
+def _missingLabels(first, last, byNumber):
+    """Labels for the numbers from first to last that aren't in byNumber.
+
+    A range longer than the table must hold a missing number, so it's labelled whole, e.g. "1-999".
+    """
     if last - first >= len(byNumber):
         return [f"{first}-{last}"]
     return [str(number) for number in range(first, last + 1) if number not in byNumber]
 
 
-_NUMBER_OR_RANGE = re.compile(r"(\d+)(?:-(\d+))?")
+_NUMBER_OR_RANGE = re.compile(r"(\d+)(?:\s*-\s*(\d+))?")
 
 
 def parseNumberList(typed):
