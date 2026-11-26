@@ -452,6 +452,7 @@ def runRip(plan, disc, encoder):
     """Rip each Disc title in plan, then encode each Rip at each Format. Exits if a step fails."""
     for planned in plan.titles:
         try:
+            print(f"Ripping {_describe(planned)}...Please wait...")
             rip = disc.rip(planned.title, plan.folder)
             print(f"Rip completed: {rip}")
             for encoded in encodeFullMkv(encoder, rip, plan.media, plan.library, planned.season,
@@ -467,13 +468,20 @@ def runRip(plan, disc, encoder):
             sys.exit(1)
 
 
+def _describe(planned):
+    """How progress messages name a planned Disc title, e.g. "Disc title 0 (S01E12)"."""
+    if planned.episode is None:
+        return f"Disc title {planned.title.number}"
+    return (f"Disc title {planned.title.number} "
+            f"({library_layout.episode_code(planned.season, planned.episode)})")
+
+
 def main():
     args = parseArgs(sys.argv[1:])
     makemkvcon, handBrake = getRequirements()
     disc = Disc(tool(makemkvcon))
     plan = planRip(args, MediaLookup(tmdb_fetch(tmdbKey())), disc)
     print(plan.summary())
-    print("Ripping...Please wait...")
     runRip(plan, disc, Encoder(tool(handBrake), args.encoder))
 
 

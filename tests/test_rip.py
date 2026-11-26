@@ -100,6 +100,31 @@ class RunRipTest(unittest.TestCase):
         self.assertIn("S01E05 - 1080p.mkv", out.getvalue())
         self.assertIn("S01E06 - 1080p.mkv", out.getvalue())
 
+    def test_each_rip_is_announced_before_it_starts(self):
+        folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        out = io.StringIO()
+
+        with redirect_stdout(out):
+            discripper.runRip(plan(SHOW, folder, [planned(0, 1, 12), planned(1, 0, 1)], 1, ["1080p"]),
+                              Disc(FakeTool(makemkv_that_copies)),
+                              Encoder(FakeTool(handbrake_that_finishes), "x265_10bit"))
+
+        lines = out.getvalue().splitlines()
+        self.assertEqual(lines[0], "Ripping Disc title 0 (S01E12)...Please wait...")
+        self.assertTrue(lines[1].startswith("Rip completed:"))
+        self.assertIn("Ripping Disc title 1 (S00E01)...Please wait...", lines)
+
+    def test_a_movie_rip_is_announced_by_its_disc_title(self):
+        folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        out = io.StringIO()
+
+        with redirect_stdout(out):
+            discripper.runRip(plan(MOVIE, folder, [discripper.PlannedTitle(title(3))]),
+                              Disc(FakeTool(makemkv_that_copies)),
+                              Encoder(FakeTool(handbrake_that_finishes), "x265_10bit"))
+
+        self.assertEqual(out.getvalue().splitlines()[0], "Ripping Disc title 3...Please wait...")
+
     def test_rips_go_in_the_disc_folder_and_encodes_in_the_library(self):
         show = Path(self.enterContext(tempfile.TemporaryDirectory()))
         with redirect_stdout(io.StringIO()):
