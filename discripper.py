@@ -81,27 +81,28 @@ def askDiscTitle(prompt, titles):
         print("You need to input a title number from the table: " + ", ".join(byNumber))
 
 
-def pickById(prompt, columns, rows):
-    """Show rows as a table and ask until a listed TMDB id is typed; return that row's item.
+def pickFromTable(prompt, columns, rows, key="ID"):
+    """Show rows as a table and ask until a listed key is typed; return that row's item.
 
-    rows is a list of (tmdb_id, item, cells), shown in the order given.
+    rows is a list of (key, item, cells), shown in the order given. key names the
+    column the user types from, such as a TMDB "ID".
     """
     table = PrettyTable()
     table.field_names = columns
     table.align = "l"
     items = {}
-    for tmdbId, item, cells in rows:
+    for typed, item, cells in rows:
         table.add_row(cells)
-        items[str(tmdbId)] = item
+        items[str(typed)] = item
     print(table)
     while True:
         print("")
         chosen = input(prompt)
         if chosen == "":
-            print("You need to input an ID from the table. ")
+            print(f"You need to input a value from the {key} column. ")
             print(table)
         elif chosen not in items:
-            print("You need to select a valid ID from the table. ")
+            print(f"You need to select a valid {key} from the table. ")
             print(table)
         else:
             return items[chosen]
@@ -147,7 +148,7 @@ def _chooseMedia(lookup, kind, name, year, tmdbId):
     if tmdbId is not None:
         media = lookup.get(kind, tmdbId)
     else:
-        media = pickById(
+        media = pickFromTable(
             "Which {} is being ripped? ".format(kind),
             ["ID", "Name", "Year", "Popularity"],
             [(r.media.tmdb_id, r.media, [r.media.tmdb_id, r.media.name, r.media.year, r.popularity])
@@ -155,10 +156,11 @@ def _chooseMedia(lookup, kind, name, year, tmdbId):
     if kind != "tv":
         return media, None
     print("Search season information...")
-    season = pickById(
+    season = pickFromTable(
         "Which {} season is being ripped? ".format(kind),
-        ["ID", "Season", "Season #", "Air Date"],
-        [(s.tmdb_id, s, [s.tmdb_id, s.name, s.number, s.air_date]) for s in lookup.seasons(media)])
+        ["Season #", "Season", "Air Date"],
+        [(s.number, s, [s.number, s.name, s.air_date]) for s in lookup.seasons(media)],
+        key="Season #")
     return media, season
 
 

@@ -191,7 +191,7 @@ class PlanRipTest(unittest.TestCase):
 
         typed answers the questions before the Disc titles; pairing answers the reassign prompt.
         """
-        return self.planRip(["-m", "tv", "--tmdbid", "44305"], ["55501", *typed, "0-2", *pairing],
+        return self.planRip(["-m", "tv", "--tmdbid", "44305"], ["1", *typed, "0-2", *pairing],
                             {"tv/44305": DRAGONS_SHOW | {"seasons": SEASONS},
                              "tv/44305/season/1": EPISODES, "tv/44305/season/0": EPISODES},
                             label=label)
@@ -207,7 +207,7 @@ class PlanRipTest(unittest.TestCase):
         self.assertTrue(got.folder.is_dir())
 
     def test_tv_asks_for_name_year_show_season_and_a_list_of_disc_titles(self):
-        typed = ["", "Dragons", "", "44305", "55501", "1", "0-2", ""]
+        typed = ["", "Dragons", "", "44305", "1", "1", "0-2", ""]
         got = self.planRip(["-m", "tv"], typed, {
             "search/tv": {"total_results": 1, "results": [DRAGONS_SHOW]},
             "tv/44305": DRAGONS_SHOW | {"seasons": SEASONS},
@@ -245,7 +245,7 @@ class PlanRipTest(unittest.TestCase):
 
     def test_a_season_tmdb_cannot_fetch_exits(self):
         with self.assertRaises(SystemExit) as exit:
-            self.planRip(["-m", "tv", "--tmdbid", "44305"], ["55501", "0-2"],
+            self.planRip(["-m", "tv", "--tmdbid", "44305"], ["1", "0-2"],
                          {"tv/44305": DRAGONS_SHOW | {"seasons": SEASONS}}, label="D1")
 
         self.assertEqual(exit.exception.code, 1)

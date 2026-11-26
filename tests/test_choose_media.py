@@ -44,20 +44,36 @@ class ChooseMovieTest(unittest.TestCase):
         found, printed = choose({"search/movie": search}, ["", "12345", "10191"], "movie", "Dragon")
 
         self.assertEqual(found[0].tmdb_id, 10191)
-        self.assertIn("You need to input an ID from the table.", printed)
+        self.assertIn("You need to input a value from the ID column.", printed)
         self.assertIn("You need to select a valid ID from the table.", printed)
 
 
 class ChooseShowTest(unittest.TestCase):
-    def test_show_search_then_asks_which_season(self):
+    def test_show_search_then_asks_which_season_by_its_number(self):
         responses = {"search/tv": {"total_results": 1, "results": [DRAGONS_SHOW]},
                      "tv/44305": {"seasons": SEASONS}}
 
-        found, printed = choose(responses, ["44305", "55509"], "tv", "Dragons")
+        found, printed = choose(responses, ["44305", "0"], "tv", "Dragons")
 
         self.assertEqual(found, (Media("tv", 44305, "DreamWorks Dragons", "2012"),
                                  Season(55509, 0, "Specials", "")))
         self.assertIn("Specials", printed)
+
+    def test_the_season_table_shows_season_numbers_not_tmdb_ids(self):
+        _, printed = choose({"tv/44305": dict(DRAGONS_SHOW, seasons=SEASONS)}, ["1"], "tv",
+                            tmdb_id=44305)
+
+        season_table = printed[printed.index("Search season information"):]
+        self.assertIn("Season #", season_table)
+        self.assertNotIn("55501", season_table)
+
+    def test_a_season_tmdb_id_is_asked_again(self):
+        found, printed = choose({"tv/44305": dict(DRAGONS_SHOW, seasons=SEASONS)},
+                                ["55509", "", "1"], "tv", tmdb_id=44305)
+
+        self.assertEqual(found[1].number, 1)
+        self.assertIn("You need to select a valid Season # from the table.", printed)
+        self.assertIn("You need to input a value from the Season # column.", printed)
 
 
 class ChooseByTmdbIdTest(unittest.TestCase):
@@ -69,7 +85,7 @@ class ChooseByTmdbIdTest(unittest.TestCase):
     def test_show_by_tmdb_id_reads_show_and_asks_which_season(self):
         show = dict(DRAGONS_SHOW, seasons=SEASONS)
 
-        found, _ = choose({"tv/44305": show}, ["55501"], "tv", tmdb_id=44305)
+        found, _ = choose({"tv/44305": show}, ["1"], "tv", tmdb_id=44305)
 
         self.assertEqual(found, (Media("tv", 44305, "DreamWorks Dragons", "2012"),
                                  Season(55501, 1, "Season 1", "2013-01-01")))
