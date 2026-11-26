@@ -109,7 +109,7 @@ The only required argument is the root directory to store all folders/files.  Th
         * /DISC LABEL (The Rips from one disc, named after its Disc label; "Disc N" if the disc has no label, and discripper asks for N)
         * /SHOW TITLE (YEAR) [tmdbid-ID]/Season 01 (The Encodes of every disc of the season, one per episode and format)
 
-For TV, you pick the Disc titles to rip as a list such as `1-4,6`. discripper then pairs them with the Season's Episodes in order, starting at the first Episode that has no Encode yet, and shows a table you can change before anything is ripped:
+For TV, you pick the Season by its number (`0` for Specials), then the Disc titles to rip as a list such as `1-4,6`. discripper then pairs them with the Season's Episodes in order, starting at the first Episode that has no Encode yet, and shows a table you can change before anything is ripped:
 
 * Enter accepts the table.
 * `3=5` puts Disc title 3 on Episode 5 of the Season you picked, and `3=S0E1` puts it on Season 0 Episode 1. The titles after it that you haven't set yourself follow on in order.
